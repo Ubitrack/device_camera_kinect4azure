@@ -22,7 +22,6 @@ class UbitrackCoreConan(ConanFile):
         "ubitrack_core:shared" : True,
         "ubitrack_vision:shared" : True,
         "ubitrack_dataflow:shared" : True,
-        "libkinect4azure:shared" : True,
     }
         
 
@@ -36,17 +35,18 @@ class UbitrackCoreConan(ConanFile):
         self.requires("ubitrack_core/%s@%s" % (self.version, userChannel))
         self.requires("ubitrack_vision/%s@%s" % (self.version, userChannel))
         self.requires("ubitrack_dataflow/%s@%s" % (self.version, userChannel))
-        self.requires("libkinect4azure/[>=2.25.0]@camposs/stable")
+        self.requires("kinect-azure-sensor-sdk/1.2.0-beta.1@camposs/stable")
+        self.requires("azure-kinect-depthengine/2.0@vendor/stable")
        
 
-    # def imports(self):
-    #     self.copy(pattern="*.dll", dst="bin", src="bin") # From bin to bin
+    def imports(self):
+        self.copy(pattern="*.dll", dst="bin", src="bin") # From bin to bin
     #     self.copy(pattern="*.dylib*", dst="lib", src="lib") 
     #     self.copy(pattern="*.so*", dst="lib", src="lib") 
        
     def build(self):
         cmake = CMake(self)
-        cmake.definitions["LIBkinect4azure_FILE_LIBNAME"] = self.deps_user_info["libkinect4azure"].kinect4azure_file_library_name
+        cmake.verbose = True
         cmake.configure()
         cmake.build()
         cmake.install()

@@ -30,7 +30,7 @@
  *
  */
 
-#include "kinect4azureFrameGrabber.h"
+#include "Kinect4AzureFrameGrabber.h"
 
 #include <iostream>
 #include <sstream>
@@ -47,7 +47,7 @@
 #include <log4cpp/Category.hh>
 
 // get a logger
-static log4cpp::Category& logger( log4cpp::Category::getInstance( "Ubitrack.device_camera_kinect4azure.kinect4azureFrameGrabber" ) );
+static log4cpp::Category& logger( log4cpp::Category::getInstance( "Ubitrack.device_camera_kinect4azure.AzureKinectFrameGrabber" ) );
 
 using namespace Ubitrack;
 using namespace Ubitrack::Vision;
@@ -211,45 +211,29 @@ Ubitrack::Vision::Image::ImageFormatProperties getImageFormatPropertiesFromRS2Fr
 
 namespace Ubitrack { namespace Drivers {
 
-    kinect4azureCameraComponent::kinect4azureCameraComponent( const std::string& sName, boost::shared_ptr< Graph::UTQLSubgraph > subgraph  )
+    AzureKinectCameraComponent::AzureKinectCameraComponent( const std::string& sName, boost::shared_ptr< Graph::UTQLSubgraph > subgraph  )
         : Dataflow::Component( sName )
         , m_outputColorImagePort("ColorImageOutput", *this)
         , m_outputGreyImagePort("GreyImageOutput", *this)
-        , m_outputIRLeftImagePort("IRLeftImageOutput", *this)
-//        , m_outputIRRightImagePort("IRRightImageOutput", *this)
+        , m_outputIRImagePort("IRImageOutput", *this)
         , m_outputDepthMapImagePort("DepthImageOutput", *this)
         , m_outputPointCloudPort("PointCloudOutput", *this)
-        , m_outputColorCameraModelPort("ColorCameraModel", *this, boost::bind(&kinect4azureCameraComponent::getColorCameraModel, this, _1))
-        , m_outputColorIntrinsicsMatrixPort("ColorIntrinsics", *this, boost::bind(&kinect4azureCameraComponent::getColorIntrinsic, this, _1))
-        , m_outputIRLeftCameraModelPort("IRLeftCameraModel", *this, boost::bind(&kinect4azureCameraComponent::getIRLeftCameraModel, this, _1))
-        , m_outputIRLeftIntrinsicsMatrixPort("IRLeftIntrinsics", *this, boost::bind(&kinect4azureCameraComponent::getIRLeftIntrinsic, this, _1))
-//        , m_outputIRRightCameraModelPort("RightCameraModel", *this, boost::bind(&kinect4azureCameraComponent::getIRRightCameraModel, this, _1))
-//        , m_outputIRRightIntrinsicsMatrixPort("IRRightIntrinsics", *this, boost::bind(&kinect4azureCameraComponent::getIRRightIntrinsic, this, _1))
-//        , m_leftIRToRightIRTransformPort("LeftToRightTransform", *this, boost::bind(&kinect4azureCameraComponent::getLeftToRightTransform, this, _1))
-        , m_leftIRToColorTransformPort("LeftToColorTransform", *this, boost::bind(&kinect4azureCameraComponent::getLeftToColorTransform, this, _1))
+        , m_outputColorCameraModelPort("ColorCameraModel", *this, boost::bind(&AzureKinectCameraComponent::getColorCameraModel, this, _1))
+        , m_outputColorIntrinsicsMatrixPort("ColorIntrinsics", *this, boost::bind(&AzureKinectCameraComponent::getColorIntrinsic, this, _1))
+        , m_outputDepthCameraModelPort("DepthCameraModel", *this, boost::bind(&AzureKinectCameraComponent::getDepthCameraModel, this, _1))
+        , m_outputDepthIntrinsicsMatrixPort("DepthtIntrinsics", *this, boost::bind(&AzureKinectCameraComponent::getDepthIntrinsic, this, _1))
+        , m_depthToColorTransformPort("DepthToColorTransform", *this, boost::bind(&AzureKinectCameraComponent::getDepthToColorTransform, this, _1))
 
-        , m_colorImageWidth(0)
-        , m_colorImageHeight(0)
-        , m_depthImageWidth(0)
-        , m_depthImageHeight(0)
-        , m_frameRate(0)
-        , m_colorStreamFormat(rs2_format::RS2_FORMAT_BGR8)
-        , m_infraredStreamFormat(rs2_format::RS2_FORMAT_Y16)
-        , m_depthStreamFormat(rs2_format::RS2_FORMAT_Z16)
+		, m_hwsync_mode(K4A_WIRED_SYNC_MODE_STANDALONE)
+		, m_colorImageFormat(K4A_IMAGE_FORMAT_COLOR_BGRA32)
+		, m_depthImageFormat(K4A_IMAGE_FORMAT_IR16)
+		, m_colorResolution(K4A_COLOR_RESOLUTION_720P)
+		, m_depthMode(K4A_DEPTH_MODE_NFOV_2X2BINNED)
+		, m_frameRate(K4A_FRAMES_PER_SECOND_30)
         , m_serialNumber("")
-        , m_depthLaserPower(150)
-        , m_depthEmitterEnabled(1)
-        , m_infraredGain(16)
-        , m_haveColorStream(false)
-        , m_haveIRLeftStream(false)
-//        , m_haveIRRightStream(false)
-        , m_haveDepthStream(false)
-        , m_rosbag_filename("rscapture.bag")
-        , m_timestamp_filename("rscapture_timestamps.txt")
-        , m_cameramodel_left_filename("rscapture_cameramodel_left.calib")
-        , m_cameramodel_color_filename("rscapture_cameramodel_color.calib")
-        , m_depth2color_filename("rscapture_depth2color.calib")
-        , m_operation_mode(OPERATION_MODE_LIVESTREAM)
+        //, m_depthLaserPower(150)
+        //, m_depthEmitterEnabled(1)
+        //, m_infraredGain(16)
         , m_autoGPUUpload(false)
     {
 
@@ -382,7 +366,7 @@ namespace Ubitrack { namespace Drivers {
         }
     }
 
-    void kinect4azureCameraComponent::start()
+    void AzureKinectCameraComponent::start()
     {
         if ( !m_running )
         {
@@ -390,7 +374,7 @@ namespace Ubitrack { namespace Drivers {
             Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
             if ((oclManager.isEnabled()) && (oclManager.isActive()) && (!oclManager.isInitialized())) {
                 LOG4CPP_INFO(logger, "Waiting for OpenCLManager Initialization callback.");
-                oclManager.registerInitCallback(boost::bind(&kinect4azureCameraComponent::startCapturing, this));
+                oclManager.registerInitCallback(boost::bind(&AzureKinectCameraComponent::startCapturing, this));
             } else {
                 startCapturing();
             }
@@ -399,7 +383,7 @@ namespace Ubitrack { namespace Drivers {
         Component::start();
     }
 
-    void kinect4azureCameraComponent::setupDevice()
+    void AzureKinectCameraComponent::setupDevice()
     {
         m_pipeline_config = rs2::config();
         m_pipeline = std::make_shared<rs2::pipeline>(m_ctx);
@@ -496,7 +480,7 @@ namespace Ubitrack { namespace Drivers {
         }
     }
 
-    void kinect4azureCameraComponent::retrieveCalibration() {
+    void AzureKinectCameraComponent::retrieveCalibration() {
 
         if (m_haveColorStream) {
             std::string portname = "ColorImageOutput";
@@ -598,7 +582,7 @@ namespace Ubitrack { namespace Drivers {
         }
     }
 
-    void kinect4azureCameraComponent::setOptions() {
+    void AzureKinectCameraComponent::setOptions() {
         /** D435 Options
             setting options works on sensors not on streams.
             not sure how to implement this in a useful way
@@ -653,7 +637,7 @@ namespace Ubitrack { namespace Drivers {
 
     }
 
-    void kinect4azureCameraComponent::startCapturing() {
+    void AzureKinectCameraComponent::startCapturing() {
 
         setupDevice();
         retrieveCalibration();
@@ -677,7 +661,7 @@ namespace Ubitrack { namespace Drivers {
 
     }
 
-    void kinect4azureCameraComponent::handleFrame(rs2::frame frame) {
+    void AzureKinectCameraComponent::handleFrame(rs2::frame frame) {
 
         // convert from frame timestamp (milliseconds, double) to Measurement::Timestamp (nanoseconds, unsigned long long)
         auto ts = (Measurement::Timestamp)(frame.get_timestamp() * 1000000);
@@ -851,7 +835,7 @@ namespace Ubitrack { namespace Drivers {
         }
     }
 
-    void kinect4azureCameraComponent::stop()
+    void AzureKinectCameraComponent::stop()
     {
         if ( m_running )
         {
@@ -864,7 +848,7 @@ namespace Ubitrack { namespace Drivers {
         }
     }
 
-    void kinect4azureCameraComponent::teardownDevice()
+    void AzureKinectCameraComponent::teardownDevice()
     {
         m_pipeline.reset();
     }
@@ -873,7 +857,7 @@ namespace Ubitrack { namespace Drivers {
 // register component at factory
     UBITRACK_REGISTER_COMPONENT( Dataflow::ComponentFactory* const cf )
     {
-        cf->registerComponent< Ubitrack::Drivers::kinect4azureCameraComponent > ( "kinect4azureCamera" );
+        cf->registerComponent< Ubitrack::Drivers::AzureKinectCameraComponent > ( "kinect4azureCamera" );
     }
 
 } } // namespace Ubitrack::Drivers

@@ -37,6 +37,7 @@
 #ifndef __kinect4azureFramegrabber_h_INCLUDED__
 #define __kinect4azureFramegrabber_h_INCLUDED__
 
+#include <k4a/k4a.h>
 
 #include <string>
 #include <cstdlib>
@@ -66,83 +67,76 @@
 #include <utVision/Image.h>
 #include <opencv2/opencv.hpp>
 
-#include <libkinect4azure2/rs.hpp>
 
-
-namespace Ubitrack { namespace Drivers {
-
-        enum kinect4azureSensorOperationMode {
-            OPERATION_MODE_LIVESTREAM = 0,
-            OPERATION_MODE_LIVESTREAM_RECORD,
-            OPERATION_MODE_PLAYBACK
-        };
-
-    }
-}
 
 namespace {
 
-    class kinect4azureOperationModeMap : public std::map< std::string, Ubitrack::Drivers::kinect4azureSensorOperationMode > {
+    class Kinect4azureHWSyndModeMap : public std::map< std::string, k4a_wired_sync_mode_t > {
     public:
-        kinect4azureOperationModeMap() {
-            (*this)["LIVESTREAM"] = Ubitrack::Drivers::OPERATION_MODE_LIVESTREAM;
-            (*this)["LIVESTREAM_RECORD"] = Ubitrack::Drivers::OPERATION_MODE_LIVESTREAM_RECORD;
-            (*this)["PLAYBACK"] = Ubitrack::Drivers::OPERATION_MODE_PLAYBACK;
+        Kinect4azureHWSyndModeMap() {
+        (*this)["STANDALONE"] = K4A_WIRED_SYNC_MODE_STANDALONE; 
+        (*this)["MASTER"] = K4A_WIRED_SYNC_MODE_MASTER;     
+        (*this)["SUBORDINATE"] = K4A_WIRED_SYNC_MODE_SUBORDINATE;
         }
     };
-    static kinect4azureOperationModeMap kinect4azureOperationModeMap;
+    static Kinect4azureHWSyndModeMap kinect4azureHWSyndModeMap;
 
 
-    class kinect4azureHWSyndModeMap : public std::map< std::string, unsigned int > {
+    class Kinect4azureDepthStreamFormatMap : public std::map< std::string, k4a_depth_mode_t > {
     public:
-        kinect4azureHWSyndModeMap() {
-            (*this)["DEFAULT"] = 0;
-            (*this)["MASTER"] = 1;
-            (*this)["SLAVE"] = 2;
+        Kinect4azureDepthStreamFormatMap() {
+            (*this)["OFF"] = K4A_DEPTH_MODE_OFF;        /**< Depth sensor will be turned off with this setting. */
+            (*this)["NFOV_2X2BINNED"] = K4A_DEPTH_MODE_NFOV_2X2BINNED; /**< Depth captured at 320x288. Passive IR is also captured at 320x288. */
+            (*this)["NFOV_UNBINNED"] = K4A_DEPTH_MODE_NFOV_UNBINNED;  /**< Depth captured at 640x576. Passive IR is also captured at 640x576. */
+            (*this)["WFOV_2X2BINNED"] = K4A_DEPTH_MODE_WFOV_2X2BINNED; /**< Depth captured at 512x512. Passive IR is also captured at 512x512. */
+            (*this)["WFOV_UNBINNED"] = K4A_DEPTH_MODE_WFOV_UNBINNED;  /**< Depth captured at 1024x1024. Passive IR is also captured at 1024x1024. */
+            (*this)["PASSIVE_IR"] = K4A_DEPTH_MODE_PASSIVE_IR;     /**< Passive IR only, captured at 1024x1024. */
         }
     };
-    static kinect4azureHWSyndModeMap kinect4azureHWSyndModeMap;
+    static Kinect4azureDepthStreamFormatMap kinect4azureDepthStreamFormatMap;
 
 
-    class kinect4azureStreamFormatMap : public std::map< std::string, rs2_format > {
+    class Kinect4azureColorStreamResolutionMap : public std::map< std::string, k4a_color_resolution_t > {
     public:
-        kinect4azureStreamFormatMap() {
-            (*this)["Z16"] = rs2_format::RS2_FORMAT_Z16;
-            (*this)["DISPARITY16"] = rs2_format::RS2_FORMAT_DISPARITY16;
-            (*this)["XYZ32F"] = rs2_format::RS2_FORMAT_XYZ32F;
-            (*this)["YUYV"] = rs2_format::RS2_FORMAT_YUYV;
-            (*this)["RGB8"] = rs2_format::RS2_FORMAT_RGB8;
-            (*this)["BGR8"] = rs2_format::RS2_FORMAT_BGR8;
-            (*this)["RGBA8"] = rs2_format::RS2_FORMAT_RGBA8;
-            (*this)["BGRA8"] = rs2_format::RS2_FORMAT_BGRA8;
-            (*this)["Y8"] = rs2_format::RS2_FORMAT_Y8;
-            (*this)["Y16"] = rs2_format::RS2_FORMAT_Y16;
-            (*this)["RAW10"] = rs2_format::RS2_FORMAT_RAW10;
-            (*this)["RAW16"] = rs2_format::RS2_FORMAT_RAW16;
-            (*this)["RAW8"] = rs2_format::RS2_FORMAT_RAW8;
+        Kinect4azureColorStreamResolutionMap() {
+        (*this)["OFF"] = K4A_COLOR_RESOLUTION_OFF; /**< Color camera will be turned off with this setting */
+        (*this)["720P"] = K4A_COLOR_RESOLUTION_720P;    /**< 1280 * 720  16:9 */
+        (*this)["1080P"] = K4A_COLOR_RESOLUTION_1080P;   /**< 1920 * 1080 16:9 */
+        (*this)["1440P"] = K4A_COLOR_RESOLUTION_1440P;   /**< 2560 * 1440 16:9 */
+        (*this)["1536P"] = K4A_COLOR_RESOLUTION_1536P;   /**< 2048 * 1536 4:3  */
+        (*this)["2160P"] = K4A_COLOR_RESOLUTION_2160P;   /**< 3840 * 2160 16:9 */
+        (*this)["3072P"] = K4A_COLOR_RESOLUTION_3072P;   /**< 4096 * 3072 4:3  */
         }
     };
-    static kinect4azureStreamFormatMap kinect4azureStreamFormatMap;
+    static Kinect4azureColorStreamResolutionMap kinect4azureColorStreamResolutionMap;
 
-    class kinect4azureStreamResolutionMap : public std::map< std::string, std::tuple< unsigned int, unsigned int> > {
+    class Kinect4azureImageFormatMap : public std::map< std::string, k4a_image_format_t > {
     public:
-        kinect4azureStreamResolutionMap() {
-            (*this)["1920x1080"] = std::make_tuple(1920, 1080);
-            (*this)["1280x800"] = std::make_tuple(1280, 800);
-            (*this)["1280x720"] = std::make_tuple(1280, 720);
-            (*this)["960x540"] = std::make_tuple(960, 540);
-            (*this)["848x480"] = std::make_tuple(848, 480);
-            (*this)["640x480"] = std::make_tuple(640, 480);
-            (*this)["640x400"] = std::make_tuple(640, 400);
-            (*this)["640x360"] = std::make_tuple(640, 360);
-            (*this)["480x270"] = std::make_tuple(480, 270);
-            (*this)["424x240"] = std::make_tuple(424, 240);
-            (*this)["320x240"] = std::make_tuple(320, 240);
-            (*this)["320x180"] = std::make_tuple(320, 180);
+        Kinect4azureImageFormatMap() {
+        (*this)["COLOR_MJPG"] = K4A_IMAGE_FORMAT_COLOR_MJPG;
+        (*this)["COLOR_NV12"] = K4A_IMAGE_FORMAT_COLOR_NV12;
+        (*this)["COLOR_YUY2"] = K4A_IMAGE_FORMAT_COLOR_YUY2;
+        (*this)["COLOR_BGRA32"] = K4A_IMAGE_FORMAT_COLOR_BGRA32;
+        (*this)["DEPTH16"] = K4A_IMAGE_FORMAT_DEPTH16;
+        (*this)["IR16"] = K4A_IMAGE_FORMAT_IR16;
+        (*this)["CUSTOM8"] = K4A_IMAGE_FORMAT_CUSTOM8;
+        (*this)["CUSTOM16"] = K4A_IMAGE_FORMAT_CUSTOM16;
+        (*this)["CUSTOM"] = K4A_IMAGE_FORMAT_CUSTOM;
+        
         }
     };
-    static kinect4azureStreamResolutionMap kinect4azureStreamResolutionMap;
+    static Kinect4azureImageFormatMap kinect4azureImageFormatMap;
 
+
+    class Kinect4azureFrameRateMap : public std::map< std::string, k4a_fps_t > {
+    public:
+        Kinect4azureFrameRateMap() {
+        (*this)["5"] = K4A_FRAMES_PER_SECOND_5; /**< 5 FPS */
+        (*this)["15"] = K4A_FRAMES_PER_SECOND_15;    /**< 15 FPS */
+        (*this)["30"] = K4A_FRAMES_PER_SECOND_30;    /**< 30 FPS */
+        }
+    };
+    static Kinect4azureFrameRateMap kinect4azureFrameRateMap;
 
 } // anonymous namespace
 
@@ -151,20 +145,10 @@ namespace {
 namespace Ubitrack { namespace Drivers {
 using namespace Dataflow;
 
-    struct stream_request
-    {
-        rs2_stream   _stream_type;
-        rs2_format   _stream_format;
-        unsigned int _width;
-        unsigned int _height;
-        unsigned int _fps;
-        unsigned int _stream_idx;
-        std::string  _port_name;
-    };
 
-    class kinect4azureCameraComponent : public Dataflow::Component {
+    class AzureKinectCameraComponent : public Dataflow::Component {
     public:
-        kinect4azureCameraComponent( const std::string& sName, boost::shared_ptr< Graph::UTQLSubgraph >  );
+        AzureKinectCameraComponent( const std::string& sName, boost::shared_ptr< Graph::UTQLSubgraph >  );
 
         void setupDevice();
 
@@ -192,98 +176,52 @@ using namespace Dataflow;
             return Measurement::Matrix3x3(t, m_colorCameraModel.matrix);
         }
         
-        Measurement::CameraIntrinsics getIRLeftCameraModel(Measurement::Timestamp t) {
-            return Measurement::CameraIntrinsics(t, m_infraredLeftCameraModel);
+        Measurement::CameraIntrinsics getDepthCameraModel(Measurement::Timestamp t) {
+            return Measurement::CameraIntrinsics(t, m_depthCameraModel);
         }
         
-        Measurement::Matrix3x3 getIRLeftIntrinsic(Measurement::Timestamp t) {
-            return Measurement::Matrix3x3(t, m_infraredLeftCameraModel.matrix);
+        Measurement::Matrix3x3 getDepthIntrinsic(Measurement::Timestamp t) {
+            return Measurement::Matrix3x3(t, m_depthCameraModel.matrix);
         }
         
-        Measurement::CameraIntrinsics getIRRightCameraModel(Measurement::Timestamp t) {
-            return Measurement::CameraIntrinsics(t, m_infraredRightCameraModel);
-        }
-        
-        Measurement::Matrix3x3 getIRRightIntrinsic(Measurement::Timestamp t) {
-            return Measurement::Matrix3x3(t, m_infraredRightCameraModel.matrix);
-        }
-        
-        Measurement::Pose getLeftToRightTransform(Measurement::Timestamp t) {
-            return Measurement::Pose(t, m_leftToRightTransform);
-        }
-        
-        Measurement::Pose getLeftToColorTransform(Measurement::Timestamp t) {
-            return Measurement::Pose(t, m_leftToColorTransform);
+        Measurement::Pose getDepthToColorTransform(Measurement::Timestamp t) {
+            return Measurement::Pose(t, m_depthToColorTransform);
         }
 
         Math::CameraIntrinsics<double> m_colorCameraModel;
-        Math::CameraIntrinsics<double> m_infraredLeftCameraModel;
-        Math::CameraIntrinsics<double> m_infraredRightCameraModel;
-        Math::Pose m_leftToRightTransform;
-        Math::Pose m_leftToColorTransform;
-
-        bool m_haveColorStream;
-        bool m_haveIRLeftStream;
-//        bool m_haveIRRightStream;
-        bool m_haveDepthStream;
+        Math::CameraIntrinsics<double> m_depthCameraModel;
+        Math::Pose m_depthToColorTransform;
 
         Dataflow::PushSupplier <Measurement::ImageMeasurement> m_outputColorImagePort;
         Dataflow::PushSupplier <Measurement::ImageMeasurement> m_outputGreyImagePort;
-        Dataflow::PushSupplier <Measurement::ImageMeasurement> m_outputIRLeftImagePort;
-//        Dataflow::PushSupplier <Measurement::ImageMeasurement> m_outputIRRightImagePort;
+        Dataflow::PushSupplier <Measurement::ImageMeasurement> m_outputIRImagePort;
         Dataflow::PushSupplier <Measurement::ImageMeasurement> m_outputDepthMapImagePort;
         Dataflow::PushSupplier <Measurement::PositionList>     m_outputPointCloudPort;
 
         Dataflow::PullSupplier <Measurement::CameraIntrinsics> m_outputColorCameraModelPort;
         Dataflow::PullSupplier <Measurement::Matrix3x3>        m_outputColorIntrinsicsMatrixPort;
-        Dataflow::PullSupplier <Measurement::CameraIntrinsics> m_outputIRLeftCameraModelPort;
-        Dataflow::PullSupplier <Measurement::Matrix3x3>        m_outputIRLeftIntrinsicsMatrixPort;
-//        Dataflow::PullSupplier <Measurement::CameraIntrinsics> m_outputIRRightCameraModelPort;
-//        Dataflow::PullSupplier <Measurement::Matrix3x3>        m_outputIRRightIntrinsicsMatrixPort;
+        Dataflow::PullSupplier <Measurement::CameraIntrinsics> m_outputDepthCameraModelPort;
+        Dataflow::PullSupplier <Measurement::Matrix3x3>        m_outputDepthIntrinsicsMatrixPort;
 
-//        Dataflow::PullSupplier <Measurement::Pose> m_leftIRToRightIRTransformPort;
-        Dataflow::PullSupplier <Measurement::Pose> m_leftIRToColorTransformPort;
+        Dataflow::PullSupplier <Measurement::Pose> m_depthToColorTransformPort;
 
         // sensor configuration
-        unsigned int m_hwsync_mode;
-        unsigned int m_colorImageWidth;
-        unsigned int m_colorImageHeight;
-        unsigned int m_depthImageWidth;
-        unsigned int m_depthImageHeight;
-
-        unsigned int m_frameRate;
-
-        rs2_format m_colorStreamFormat;
-        rs2_format m_infraredStreamFormat;
-        rs2_format m_depthStreamFormat;
+		k4a_wired_sync_mode_t m_hwsync_mode;
+		k4a_image_format_t m_colorImageFormat;
+		k4a_image_format_t m_depthImageFormat;
+		k4a_color_resolution_t m_colorResolution;
+		k4a_depth_mode_t m_depthMode;
+		k4a_fps_t m_frameRate;
 
         std::string m_serialNumber;
 
-        unsigned int m_depthLaserPower;
-        unsigned int m_depthEmitterEnabled;
-        unsigned int m_infraredGain;
+        //unsigned int m_depthLaserPower;
+        //unsigned int m_depthEmitterEnabled;
+        //unsigned int m_infraredGain;
 
-        /** libkinect4azure context for managing devices **/
-        rs2::context m_ctx;
+        /** libkinect4azure instances **/
 
-        /** the associated kinect4azure device **/
-        rs2::config m_pipeline_config;
-        std::shared_ptr<rs2::pipeline> m_pipeline;
-        rs2::pipeline_profile m_pipeline_profile;
-        std::vector<stream_request> m_stream_requests;
-        std::map<std::string, rs2::stream_profile> m_stream_profile_map;
-        std::vector<rs2::stream_profile> m_selected_stream_profiles;
-
-
-        // sensor operation mode
-        kinect4azureSensorOperationMode m_operation_mode;
-        boost::filesystem::path m_rosbag_filename;
-        boost::filesystem::path m_timestamp_filename;
-        boost::filesystem::path m_cameramodel_left_filename;
-        boost::filesystem::path m_cameramodel_color_filename;
-        boost::filesystem::path m_depth2color_filename;
-
-        std::filebuf m_timestamp_filebuffer;
+		k4a_device_t m_device;
 
         bool m_autoGPUUpload;
     };

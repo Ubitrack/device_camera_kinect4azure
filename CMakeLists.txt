@@ -12,8 +12,6 @@ conan_basic_setup(TARGETS)
 include(GNUInstallDirs)
 include(cmake/UbitrackConfig)
 
-OPTION(LIBkinect4azure_FILE_LIBNAME "Libkinect4azure Library Filename" "")
-
 # External Libraries (could this be solved with conan dependencies ??)
 
 # OpenGL
@@ -36,7 +34,7 @@ ENDIF(OpenCL_FOUND)
 
 set(UBITRACK_EXTRA_LIBS ${UBITRACK_EXTRA_LIBS})
 
-set(UBITRACK_COMPILE_DEFINITIONS ${UBITRACK_COMPILE_DEFINITIONS} "HAVE_kinect4azure")
+set(UBITRACK_COMPILE_DEFINITIONS ${UBITRACK_COMPILE_DEFINITIONS} "HAVE_KINECT4AZURE")
 
 add_subdirectory(src/kinect4azure)
 
