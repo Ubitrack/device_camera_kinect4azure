@@ -37,7 +37,7 @@
 #ifndef __kinect4azureFramegrabber_h_INCLUDED__
 #define __kinect4azureFramegrabber_h_INCLUDED__
 
-#include <k4a/k4a.h>
+#include <k4a/k4a.hpp>
 
 #include <string>
 #include <cstdlib>
@@ -49,6 +49,7 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
+#include <boost/thread.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/filesystem.hpp>
 
@@ -160,13 +161,17 @@ using namespace Dataflow;
 
         void startCapturing();
 
-        void handleFrame(rs2::frame f);
+        void handleDepthFrame(k4a::image f);
 
-        void stop();
+		void handleColorFrame(k4a::image f);
+		
+		void stop();
 
         virtual void teardownDevice();
 
     protected:
+
+		void threadFunc();
 
         Measurement::CameraIntrinsics getColorCameraModel(Measurement::Timestamp t) {
             return Measurement::CameraIntrinsics(t, m_colorCameraModel);
@@ -208,10 +213,14 @@ using namespace Dataflow;
         // sensor configuration
 		k4a_wired_sync_mode_t m_hwsync_mode;
 		k4a_image_format_t m_colorImageFormat;
-		k4a_image_format_t m_depthImageFormat;
 		k4a_color_resolution_t m_colorResolution;
 		k4a_depth_mode_t m_depthMode;
 		k4a_fps_t m_frameRate;
+
+		bool m_synchronizedImagesOnly;
+		int32_t m_depthDelayOffcolorUsec;
+		uint32_t m_subordinateDelayOffMasterUsec;
+		bool m_disableStreamingIndicator;
 
         std::string m_serialNumber;
 
@@ -219,9 +228,12 @@ using namespace Dataflow;
         //unsigned int m_depthEmitterEnabled;
         //unsigned int m_infraredGain;
 
+		boost::shared_ptr< boost::thread > m_pCaptureThread;
+
         /** libkinect4azure instances **/
 
-		k4a_device_t m_device;
+		k4a::device m_device;
+		k4a_device_configuration_t m_device_config;
 
         bool m_autoGPUUpload;
     };

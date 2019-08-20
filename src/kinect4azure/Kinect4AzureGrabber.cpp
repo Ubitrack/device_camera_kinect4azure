@@ -53,93 +53,73 @@ using namespace Ubitrack;
 using namespace Ubitrack::Vision;
 using namespace Ubitrack::Drivers;
 
-bool profile_contains_stream(const std::map<std::string, rs2::stream_profile>& map, const std::string& key) {
-    return (map.find(key) != map.end());
+bool get_intrinsics_for_camera(const k4a_calibration_camera_t& k4a_calib, Math::CameraIntrinsics<double>& value) {
+	auto& p = k4a_calib.intrinsics.parameters;
+
+    Math::Matrix< double, 3, 3 > intrinsicMatrix = Math::Matrix3x3d::identity();
+    intrinsicMatrix(0, 0) = (double)p.param.fx;
+    intrinsicMatrix(1, 1) = (double)p.param.fy;
+    intrinsicMatrix(0, 2) = -(double)p.param.cx;
+    intrinsicMatrix(1, 2) = -(double)p.param.cy;
+    intrinsicMatrix(2, 2) = -1.0;
+
+	Math::Vector< double, 6 > radial;
+	radial(0) = (double)p.param.k1;
+	radial(1) = (double)p.param.k2;
+	radial(2) = (double)p.param.k3;
+	radial(3) = (double)p.param.k4;
+	radial(4) = (double)p.param.k5;
+	radial(5) = (double)p.param.k6;
+
+    Math::Vector< double, 2 > tangential(
+		(double)p.param.p1,
+		(double)p.param.p2);
+    
+	auto width = (std::size_t)k4a_calib.resolution_width;
+    auto height = (std::size_t)k4a_calib.resolution_height;
+
+    value = Math::CameraIntrinsics<double>(intrinsicMatrix, radial, tangential, width, height);
+
+    // Does this apply to Kinect Azure ??
+	// this camera has image origin of 0, ubitrack default is 1, flip needed of cy and tangential parameter needed
+    //value = Vision::Util::cv2::correctForOrigin(0, value);
+    //LOG4CPP_DEBUG(logger, key << " Camera Model: " << value);
+
+	return true;
 }
 
-bool get_intrinsics_for_stream(std::map<std::string, rs2::stream_profile>& map, const std::string& key, Math::CameraIntrinsics<double>& value) {
-    if (profile_contains_stream(map, key)) {
-        auto& stream_profile = map[key];
-        if (auto vp = stream_profile.as<rs2::video_stream_profile>()) {
-            try {
-                rs2_intrinsics intr = vp.get_intrinsics();
+bool get_pose_from_extrinsics(const k4a_calibration_extrinsics_t& extrinsics, Math::Pose& value) {
 
-                Math::Matrix< double, 3, 3 > intrinsicMatrix = Math::Matrix3x3d::identity();
-                intrinsicMatrix(0, 0) = intr.fx;
-                intrinsicMatrix(1, 1) = intr.fy;
-                intrinsicMatrix(0, 2) = -intr.ppx;
-                intrinsicMatrix(1, 2) = -intr.ppy;
-                intrinsicMatrix(2, 2) = -1.0;
+    auto rot_mat = Math::Matrix3x3d::identity();
 
-                // [ k1, k2, p1, p2, k3 ]
-                Math::Vector< double, 3 > radial(intr.coeffs[0],
-                                                 intr.coeffs[1],
-                                                 intr.coeffs[4]);
-                Math::Vector< double, 2 > tangential(intr.coeffs[2],
-                                                     intr.coeffs[3]);
-                auto width = (std::size_t)intr.width;
-                auto height = (std::size_t)intr.height;
+    // libkinect4azure is row major and ubitrack store matrices column-major
+    rot_mat( 0, 0 ) = (double)extrinsics.rotation[0];
+    rot_mat( 1, 0 ) = (double)extrinsics.rotation[1];
+    rot_mat( 2, 0 ) = (double)extrinsics.rotation[2];
 
-                value = Math::CameraIntrinsics<double>(intrinsicMatrix, radial, tangential, width, height);
+    rot_mat( 0, 1 ) = (double)extrinsics.rotation[3];
+    rot_mat( 1, 1 ) = (double)extrinsics.rotation[4];
+    rot_mat( 2, 1 ) = (double)extrinsics.rotation[5];
 
-                // real sense has image origin of 0, ubitrack default is 1, flip needed of cy and tangential parameter needed
-                value = Vision::Util::cv2::correctForOrigin(0, value);
+    rot_mat( 0, 2 ) = (double)extrinsics.rotation[6];
+    rot_mat( 1, 2 ) = (double)extrinsics.rotation[7];
+    rot_mat( 2, 2 ) = (double)extrinsics.rotation[8];
 
-                LOG4CPP_DEBUG(logger, key << " Camera Model: " << value);
-                return true;
-            } catch( rs2::error& e) {
-                LOG4CPP_ERROR(logger, e.what());
-            }
-        }
-    }
-    value = Math::CameraIntrinsics<double>();
-    return false;
+    Math::Quaternion ut_quat(rot_mat);
+
+    Math::Vector3d ut_trans(
+            (double)extrinsics.translation[0],
+            (double)extrinsics.translation[1],
+            (double)extrinsics.translation[2]
+    );
+    value = Math::Pose(ut_quat, ut_trans);
+    return true;
 }
 
-bool get_pose_between_streams(std::map<std::string, rs2::stream_profile>& map, const std::string& source,
-                              const std::string& destination, Math::Pose& value) {
-    if ((profile_contains_stream(map, source)) && (profile_contains_stream(map, destination))) {
-        auto& left_stream_profile = map[source];
-        auto& color_stream_profile = map[destination];
-        try {
-            auto left2color = left_stream_profile.get_extrinsics_to(color_stream_profile);
-            auto rot_mat = Math::Matrix3x3d::identity();
-
-            // libkinect4azure and ubitrack store matrices column-major
-            rot_mat( 0, 0 ) = left2color.rotation[0];
-            rot_mat( 1, 0 ) = left2color.rotation[3];
-            rot_mat( 2, 0 ) = left2color.rotation[6];
-
-            rot_mat( 0, 1 ) = left2color.rotation[1];
-            rot_mat( 1, 1 ) = left2color.rotation[4];
-            rot_mat( 2, 1 ) = left2color.rotation[7];
-
-            rot_mat( 0, 2 ) = left2color.rotation[2];
-            rot_mat( 1, 2 ) = left2color.rotation[5];
-            rot_mat( 2, 2 ) = left2color.rotation[8];
-
-            Math::Quaternion ut_quat(rot_mat);
-
-            Math::Vector3d ut_trans(
-                    (double)left2color.translation[0],
-                    (double)left2color.translation[1],
-                    (double)left2color.translation[2]
-            );
-            value = Math::Pose(ut_quat, ut_trans);
-            LOG4CPP_DEBUG(logger, "IR Left2Color Transform: " << value);
-            return true;
-        } catch (rs2::error& e) {
-            LOG4CPP_ERROR(logger, e.what());
-        }
-    }
-    value = Math::Pose();
-    return false;
-}
-
-Ubitrack::Vision::Image::ImageFormatProperties getImageFormatPropertiesFromRS2Frame(const rs2::frame& f) {
+Ubitrack::Vision::Image::ImageFormatProperties getImageFormatPropertiesFromK4AImage(const k4a::image& f) {
     auto imageFormatProperties = Vision::Image::ImageFormatProperties();
-    switch (f.get_profile().format()) {
-        case RS2_FORMAT_BGRA8:
+    switch (f.get_format()) {
+		case K4A_IMAGE_FORMAT_COLOR_BGRA32:
             imageFormatProperties.depth = CV_8U;
             imageFormatProperties.channels = 4;
             imageFormatProperties.matType = CV_8UC4;
@@ -148,62 +128,38 @@ Ubitrack::Vision::Image::ImageFormatProperties getImageFormatPropertiesFromRS2Fr
             imageFormatProperties.imageFormat = Vision::Image::BGRA;
             break;
 
-        case RS2_FORMAT_BGR8:
-            imageFormatProperties.depth = CV_8U;
-            imageFormatProperties.channels = 3;
-            imageFormatProperties.matType = CV_8UC3;
-            imageFormatProperties.bitsPerPixel = 24;
-            imageFormatProperties.origin = 0;
-            imageFormatProperties.imageFormat = Vision::Image::BGR;
-            break;
+		case K4A_IMAGE_FORMAT_DEPTH16:
+			imageFormatProperties.depth = CV_16U;
+			imageFormatProperties.channels = 1;
+			imageFormatProperties.matType = CV_16UC1;
+			imageFormatProperties.bitsPerPixel = 16;
+			imageFormatProperties.origin = 0;
+			imageFormatProperties.imageFormat = Vision::Image::DEPTH;
+			break;
 
-        case RS2_FORMAT_RGBA8:
-            imageFormatProperties.depth = CV_8U;
-            imageFormatProperties.channels = 4;
-            imageFormatProperties.matType = CV_8UC4;
-            imageFormatProperties.bitsPerPixel = 32;
-            imageFormatProperties.origin = 0;
-            imageFormatProperties.imageFormat = Vision::Image::RGBA;
-            break;
+		case K4A_IMAGE_FORMAT_IR16:
+			imageFormatProperties.depth = CV_16U;
+			imageFormatProperties.channels = 1;
+			imageFormatProperties.matType = CV_16UC1;
+			imageFormatProperties.bitsPerPixel = 16;
+			imageFormatProperties.origin = 0;
+			imageFormatProperties.imageFormat = Vision::Image::LUMINANCE;
+			break;
 
-        case RS2_FORMAT_RGB8:
-            imageFormatProperties.depth = CV_8U;
-            imageFormatProperties.channels = 3;
-            imageFormatProperties.matType = CV_8UC3;
-            imageFormatProperties.bitsPerPixel = 24;
-            imageFormatProperties.origin = 0;
-            imageFormatProperties.imageFormat = Vision::Image::RGB;
-            break;
-
-        case RS2_FORMAT_Y16:
-            imageFormatProperties.depth = CV_16U;
-            imageFormatProperties.channels = 1;
-            imageFormatProperties.matType = CV_16UC1;
-            imageFormatProperties.bitsPerPixel = 16;
-            imageFormatProperties.origin = 0;
-            imageFormatProperties.imageFormat = Vision::Image::LUMINANCE;
-            break;
-
-        case RS2_FORMAT_Y8:
-            imageFormatProperties.depth = CV_8U;
-            imageFormatProperties.channels = 1;
-            imageFormatProperties.matType = CV_8UC1;
-            imageFormatProperties.bitsPerPixel = 8;
-            imageFormatProperties.origin = 0;
-            imageFormatProperties.imageFormat = Vision::Image::LUMINANCE;
-            break;
-
-        case RS2_FORMAT_Z16:
-            imageFormatProperties.depth = CV_16U;
-            imageFormatProperties.channels = 1;
-            imageFormatProperties.matType = CV_16UC1;
-            imageFormatProperties.bitsPerPixel = 16;
-            imageFormatProperties.origin = 0;
-            imageFormatProperties.imageFormat = Vision::Image::DEPTH;
-            break;
-
-        default:
-            UBITRACK_THROW("kinect4azure frame format is not supported!");
+		case K4A_IMAGE_FORMAT_CUSTOM8:
+			imageFormatProperties.depth = CV_8U;
+			imageFormatProperties.channels = 1;
+			imageFormatProperties.matType = CV_8UC1;
+			imageFormatProperties.bitsPerPixel = 8;
+			imageFormatProperties.origin = 0;
+			imageFormatProperties.imageFormat = Vision::Image::LUMINANCE;
+			break;
+		case K4A_IMAGE_FORMAT_COLOR_MJPG:
+		case K4A_IMAGE_FORMAT_COLOR_NV12:
+		case K4A_IMAGE_FORMAT_COLOR_YUY2:
+		case K4A_IMAGE_FORMAT_CUSTOM16:
+		default:
+            UBITRACK_THROW("kinect4azure frame format is (currently) not supported!");
     }
     return imageFormatProperties;
 }
@@ -226,134 +182,80 @@ namespace Ubitrack { namespace Drivers {
 
 		, m_hwsync_mode(K4A_WIRED_SYNC_MODE_STANDALONE)
 		, m_colorImageFormat(K4A_IMAGE_FORMAT_COLOR_BGRA32)
-		, m_depthImageFormat(K4A_IMAGE_FORMAT_IR16)
-		, m_colorResolution(K4A_COLOR_RESOLUTION_720P)
+		, m_colorResolution(K4A_COLOR_RESOLUTION_1536P)
 		, m_depthMode(K4A_DEPTH_MODE_NFOV_2X2BINNED)
 		, m_frameRate(K4A_FRAMES_PER_SECOND_30)
-        , m_serialNumber("")
+		, m_synchronizedImagesOnly(true)
+	    , m_depthDelayOffcolorUsec(0)
+	    , m_subordinateDelayOffMasterUsec(0)
+	    , m_disableStreamingIndicator(false)
+		, m_device_config(K4A_DEVICE_CONFIG_INIT_DISABLE_ALL)
+		, m_serialNumber("")
         //, m_depthLaserPower(150)
         //, m_depthEmitterEnabled(1)
         //, m_infraredGain(16)
         , m_autoGPUUpload(false)
     {
 
-        if (subgraph->m_DataflowAttributes.hasAttribute("rsSerialNumber")) {
-            m_serialNumber = subgraph->m_DataflowAttributes.getAttributeString("rsSerialNumber");
+        if (subgraph->m_DataflowAttributes.hasAttribute("k4aSerialNumber")) {
+            m_serialNumber = subgraph->m_DataflowAttributes.getAttributeString("k4aSerialNumber");
         }
 
-        if ( subgraph->m_DataflowAttributes.hasAttribute( "rsColorVideoResolution" ) )
+		if (subgraph->m_DataflowAttributes.hasAttribute("k4aDepthMode"))
+		{
+			std::string sDepthMode = subgraph->m_DataflowAttributes.getAttributeString("k4aDepthMode");
+			if (kinect4azureDepthStreamFormatMap.find(sDepthMode) == kinect4azureDepthStreamFormatMap.end())
+				UBITRACK_THROW("unknown depth mode: \"" + sDepthMode + "\"");
+			m_depthMode = kinect4azureDepthStreamFormatMap[sDepthMode];
+		}
+		
+		if ( subgraph->m_DataflowAttributes.hasAttribute( "k4aColorVideoResolution" ) )
         {
-            std::string sResolution = subgraph->m_DataflowAttributes.getAttributeString( "rsColorVideoResolution" );
-            if ( kinect4azureStreamResolutionMap.find( sResolution ) == kinect4azureStreamResolutionMap.end() )
-                UBITRACK_THROW( "unknown stream resolution: \"" + sResolution + "\"" );
-            std::tuple<unsigned int, unsigned int> resolution = kinect4azureStreamResolutionMap[ sResolution ];
-            m_colorImageWidth = std::get<0>(resolution);
-            m_colorImageHeight = std::get<1>(resolution);
+            std::string sResolution = subgraph->m_DataflowAttributes.getAttributeString( "k4aColorVideoResolution" );
+            if ( kinect4azureColorStreamResolutionMap.find( sResolution ) == kinect4azureColorStreamResolutionMap.end() )
+                UBITRACK_THROW( "unknown color stream resolution: \"" + sResolution + "\"" );
+            m_colorResolution = kinect4azureColorStreamResolutionMap[ sResolution ];
         }
-        if ( subgraph->m_DataflowAttributes.hasAttribute( "rsColorVideoStreamFormat" ) )
+        
+		if ( subgraph->m_DataflowAttributes.hasAttribute( "k4aColorImageFormat" ) )
         {
-            std::string sStreamFormat = subgraph->m_DataflowAttributes.getAttributeString( "rsColorVideoStreamFormat" );
-            if ( kinect4azureStreamFormatMap.find( sStreamFormat ) == kinect4azureStreamFormatMap.end() )
-                UBITRACK_THROW( "unknown stream type: \"" + sStreamFormat + "\"" );
-            m_colorStreamFormat = kinect4azureStreamFormatMap[ sStreamFormat ];
+            std::string sStreamFormat = subgraph->m_DataflowAttributes.getAttributeString( "k4aColorImageFormat" );
+            if (kinect4azureImageFormatMap.find( sStreamFormat ) == kinect4azureImageFormatMap.end() )
+                UBITRACK_THROW( "unknown color stream type: \"" + sStreamFormat + "\"" );
+            m_colorImageFormat = kinect4azureImageFormatMap[ sStreamFormat ];
         }
 
-        if ( subgraph->m_DataflowAttributes.hasAttribute( "rsInfraredVideoStreamFormat" ) )
+		if (subgraph->m_DataflowAttributes.hasAttribute("k4aFrameRate"))
+		{
+			std::string sFrameRate = subgraph->m_DataflowAttributes.getAttributeString("k4aFrameRate");
+			if (kinect4azureFrameRateMap.find(sFrameRate) == kinect4azureFrameRateMap.end())
+				UBITRACK_THROW("unknown frame rate: \"" + sFrameRate + "\"");
+			m_frameRate = kinect4azureFrameRateMap[sFrameRate];
+		}
+
+		if (subgraph->m_DataflowAttributes.hasAttribute("k4aSynchronizedImagesOnly")) {
+			m_synchronizedImagesOnly = subgraph->m_DataflowAttributes.getAttributeString("k4aSynchronizedImagesOnly") == "true";
+		}
+
+		if (subgraph->m_DataflowAttributes.hasAttribute("k4aDisableStreamingIndicator")) {
+			m_disableStreamingIndicator = subgraph->m_DataflowAttributes.getAttributeString("k4aDisableStreamingIndicator") == "true";
+		}
+
+		subgraph->m_DataflowAttributes.getAttributeData("k4aDelayOffColorUsec", m_depthDelayOffcolorUsec);
+		subgraph->m_DataflowAttributes.getAttributeData("k4aSubordinateDelayOffMaster", m_subordinateDelayOffMasterUsec);
+
+
+        if ( subgraph->m_DataflowAttributes.hasAttribute( "k4aWiredSyncMode" ) )
         {
-            std::string sStreamFormat = subgraph->m_DataflowAttributes.getAttributeString( "rsInfraredVideoStreamFormat" );
-            if ( kinect4azureStreamFormatMap.find( sStreamFormat ) == kinect4azureStreamFormatMap.end() )
-                UBITRACK_THROW( "unknown stream type: \"" + sStreamFormat + "\"" );
-            m_infraredStreamFormat = kinect4azureStreamFormatMap[ sStreamFormat ];
+            std::string sWiredSyncMode = subgraph->m_DataflowAttributes.getAttributeString( "k4aWiredSyncMode" );
+            if (kinect4azureHWSyndModeMap.find( sWiredSyncMode ) == kinect4azureHWSyndModeMap.end() )
+                UBITRACK_THROW( "unknown wired sync mode: \"" + sWiredSyncMode + "\"" );
+            m_hwsync_mode = kinect4azureHWSyndModeMap[ sWiredSyncMode ];
         }
 
-        if ( subgraph->m_DataflowAttributes.hasAttribute( "rsDepthResolution" ) )
-        {
-            std::string sResolution = subgraph->m_DataflowAttributes.getAttributeString( "rsDepthResolution" );
-            if ( kinect4azureStreamResolutionMap.find( sResolution ) == kinect4azureStreamResolutionMap.end() )
-                UBITRACK_THROW( "unknown stream type: \"" + sResolution + "\"" );
-            std::tuple<unsigned int, unsigned int> resolution = kinect4azureStreamResolutionMap[ sResolution ];
-            m_depthImageWidth = std::get<0>(resolution);
-            m_depthImageHeight = std::get<1>(resolution);
-        }
-
-        if ( subgraph->m_DataflowAttributes.hasAttribute( "rsOperationMode" ) )
-        {
-            std::string sOperationMode = subgraph->m_DataflowAttributes.getAttributeString( "rsOperationMode" );
-            if ( kinect4azureOperationModeMap.find( sOperationMode ) == kinect4azureOperationModeMap.end() )
-                UBITRACK_THROW( "unknown operation mode: \"" + sOperationMode + "\"" );
-            m_operation_mode = kinect4azureOperationModeMap[ sOperationMode ];
-        }
-
-
-        if (subgraph->m_DataflowAttributes.hasAttribute("rsRosBagFilename")){
-            boost::filesystem::path m_rosbag_filename_expanded = Ubitrack::Util::getFilesystemPath(subgraph->m_DataflowAttributes.getAttributeString("rsRosBagFilename"));
-            m_rosbag_filename = m_rosbag_filename_expanded.string();
-        }
-        if (subgraph->m_DataflowAttributes.hasAttribute("rsTimestampFilename")){
-            boost::filesystem::path m_timestamp_filename_expanded = Ubitrack::Util::getFilesystemPath(subgraph->m_DataflowAttributes.getAttributeString("rsTimestampFilename"));
-            m_timestamp_filename = m_timestamp_filename_expanded.string();
-        }
-        if (subgraph->m_DataflowAttributes.hasAttribute("rsCameraModelLeftFilename")){
-            boost::filesystem::path m_cameramodel_left_filename_expanded = Ubitrack::Util::getFilesystemPath(subgraph->m_DataflowAttributes.getAttributeString("rsCameraModelLeftFilename"));
-            m_cameramodel_left_filename = m_cameramodel_left_filename_expanded.string();
-        }
-        if (subgraph->m_DataflowAttributes.hasAttribute("rsCameraModelColorFilename")){
-            boost::filesystem::path m_cameramodel_color_filename_expanded = Ubitrack::Util::getFilesystemPath(subgraph->m_DataflowAttributes.getAttributeString("rsCameraModelColorFilename"));
-            m_cameramodel_color_filename = m_cameramodel_color_filename_expanded.string();
-        }
-        if (subgraph->m_DataflowAttributes.hasAttribute("rsDepth2ColorFilename")){
-            boost::filesystem::path m_depth2color_filename_expanded = Ubitrack::Util::getFilesystemPath(subgraph->m_DataflowAttributes.getAttributeString("rsDepth2ColorFilename"));
-            m_depth2color_filename = m_depth2color_filename_expanded.string();
-        }
-
-        if ( subgraph->m_DataflowAttributes.hasAttribute( "rsHardwareSync" ) )
-        {
-            std::string sHardwareSync = subgraph->m_DataflowAttributes.getAttributeString( "rsHardwareSync" );
-            if ( kinect4azureHWSyndModeMap.find( sHardwareSync ) == kinect4azureHWSyndModeMap.end() )
-                UBITRACK_THROW( "unknown hardware sync mode: \"" + sHardwareSync + "\"" );
-            m_hwsync_mode = kinect4azureHWSyndModeMap[ sHardwareSync ];
-        }
-
-        subgraph->m_DataflowAttributes.getAttributeData( "rsFrameRate", m_frameRate );
-
-        subgraph->m_DataflowAttributes.getAttributeData( "rsLaserPower", m_depthLaserPower);
-        subgraph->m_DataflowAttributes.getAttributeData( "rsEmitterEnabled", m_depthEmitterEnabled);
-        subgraph->m_DataflowAttributes.getAttributeData( "rsInfraredGain", m_infraredGain);
-
-        // the following is an attempt to make the component configurable through the associated pattern.
-        // if certain edges don't exist in the pattern, the streams will not be requested from the camera.
-        if (subgraph->hasEdge("ColorImageOutput")) {
-            LOG4CPP_INFO(logger, "Activate Color Stream.");
-            m_stream_requests.push_back(
-                    {rs2_stream::RS2_STREAM_COLOR, m_colorStreamFormat, m_colorImageWidth,
-                     m_colorImageHeight, m_frameRate, 0, "ColorImageOutput"});
-            m_haveColorStream = true;
-        }
-
-        if (subgraph->hasEdge("IRLeftImageOutput")) {
-            LOG4CPP_INFO(logger, "Activate Left Infrared Stream.");
-            m_stream_requests.push_back(
-                    {rs2_stream::RS2_STREAM_INFRARED, m_infraredStreamFormat, m_depthImageWidth,
-                     m_depthImageHeight, m_frameRate, 1, "IRLeftImageOutput"});
-            m_haveIRLeftStream = true;
-        }
-
-//        if (subgraph->hasEdge("IRRightImageOutput")) {
-//            LOG4CPP_INFO(logger, "Activate Right Infrared Stream.");
-//            m_stream_requests.push_back(
-//                    {rs2_stream::RS2_STREAM_INFRARED, m_infraredStreamFormat, m_depthImageWidth,
-//                     m_depthImageHeight, m_frameRate, 2, "IRRightImageOutput"});
-//            m_haveIRRightStream = true;
-//        }
-//
-        if (subgraph->hasEdge("DepthImageOutput") || subgraph->hasEdge("PointCloudOutput")) {
-            LOG4CPP_INFO(logger, "Activate Depth Stream.");
-            m_stream_requests.push_back(
-                    {rs2_stream::RS2_STREAM_DEPTH, rs2_format::RS2_FORMAT_Z16, m_depthImageWidth,
-                     m_depthImageHeight, m_frameRate, 0, "DepthImageOutput"});
-            m_haveDepthStream = true;
-        }
-
+        //subgraph->m_DataflowAttributes.getAttributeData( "rsLaserPower", m_depthLaserPower);
+        //subgraph->m_DataflowAttributes.getAttributeData( "rsEmitterEnabled", m_depthEmitterEnabled);
+        //subgraph->m_DataflowAttributes.getAttributeData( "rsInfraredGain", m_infraredGain);
 
         Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
         if (oclManager.isEnabled()) {
@@ -370,7 +272,7 @@ namespace Ubitrack { namespace Drivers {
     {
         if ( !m_running )
         {
-            // check if oclmanager is active
+			// check if oclmanager is active
             Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
             if ((oclManager.isEnabled()) && (oclManager.isActive()) && (!oclManager.isInitialized())) {
                 LOG4CPP_INFO(logger, "Waiting for OpenCLManager Initialization callback.");
@@ -385,255 +287,85 @@ namespace Ubitrack { namespace Drivers {
 
     void AzureKinectCameraComponent::setupDevice()
     {
-        m_pipeline_config = rs2::config();
-        m_pipeline = std::make_shared<rs2::pipeline>(m_ctx);
 
-        switch(m_operation_mode) {
-            case OPERATION_MODE_LIVESTREAM:
-                break;
+		// Find the device
+		//
 
-            case OPERATION_MODE_LIVESTREAM_RECORD:
-                m_pipeline_config.enable_record_to_file(m_rosbag_filename.string());
-                break;
+		const uint32_t device_count = k4a::device::get_installed_count();
+		if (device_count == 0)
+		{
+			UBITRACK_THROW("No Azure Kinect devices detected!");
+		}
 
-            case OPERATION_MODE_PLAYBACK:
-                m_pipeline_config.enable_device_from_file(m_rosbag_filename.string());
-                m_pipeline_config.enable_all_streams();
-                break;
-        }
+		bool found_device = false;
+		LOG4CPP_DEBUG(logger, "Found " << int(device_count) << " connected devices:");
+		for (uint8_t deviceIndex = 0; deviceIndex < device_count; deviceIndex++)
+		{
+			auto candidate = k4a::device::open(deviceIndex);
+			auto serialnr = candidate.get_serialnum();
+			if (m_serialNumber == serialnr) {
+				LOG4CPP_INFO(logger, "Found Azure Kinect with Serial: " << serialnr);
+				found_device = true;
+				m_device = std::move(candidate);
+				break;
+			}
+			else {
+				LOG4CPP_DEBUG(logger, "Found Azure Kinect with NON MATCHING Serial: " << serialnr);
+			}
+		}
 
-        if (m_operation_mode != OPERATION_MODE_PLAYBACK) {
-            // if serialNumber != 0, ask for it and "reserve" it.
-            if (m_serialNumber != "") {
-                LOG4CPP_INFO(logger, "Require kinect4azure camera with serialnumber: " << m_serialNumber);
-                m_pipeline_config.enable_device(m_serialNumber);
-            }
+		if (!found_device) {
+			UBITRACK_THROW("No Azure Kinect device with matching serial number detected!");
+		}
 
-            // only configure streams when accessing the sensor
-            for (auto i = 0; i < m_stream_requests.size(); i++) {
-                LOG4CPP_DEBUG(logger, "Enable Stream: " << m_stream_requests[i]._port_name << " Type: " << m_stream_requests[i]._stream_type
-                << " Idx: " << m_stream_requests[i]._stream_idx << " Format: " << m_stream_requests[i]._stream_format << " ("
-                << m_stream_requests[i]._width << "x" << m_stream_requests[i]._height << ")");
+		// Start the device
+		//
 
-                m_pipeline_config.enable_stream(
-                        m_stream_requests[i]._stream_type,
-                        m_stream_requests[i]._stream_idx,
-                        m_stream_requests[i]._width,
-                        m_stream_requests[i]._height,
-                        m_stream_requests[i]._stream_format,
-                        m_stream_requests[i]._fps
-                );
-            }
-        }
+		m_device_config.camera_fps = m_frameRate;
+		m_device_config.depth_mode = m_depthMode;
+		m_device_config.color_format = m_colorImageFormat;
+		m_device_config.color_resolution = m_colorResolution;
+		m_device_config.synchronized_images_only = m_synchronizedImagesOnly;
+		m_device_config.depth_delay_off_color_usec = m_depthDelayOffcolorUsec;
+		m_device_config.wired_sync_mode = m_hwsync_mode;
+		m_device_config.subordinate_delay_off_master_usec = m_subordinateDelayOffMasterUsec;
+		m_device_config.disable_streaming_indicator = m_disableStreamingIndicator;
 
-        try {
-            Ubitrack::Util::sleep(2000);
-            m_pipeline_profile = m_pipeline_config.resolve(*m_pipeline);
-        } catch(rs2::error &e) {
-            LOG4CPP_ERROR(logger, "Error while starting pipeline: " << e.what());
-            UBITRACK_THROW("Cannot setup kinect4azure device");
-        }
+		LOG4CPP_DEBUG(logger, "Started opening K4A device...");
 
-        // check sensor for compatible config and build map
-        bool succeed = false;
-        size_t expected_number_of_streams = m_stream_requests.size();
-        m_stream_profile_map.clear();
+		m_device.start_cameras(&m_device_config);
 
-        for (auto&& sensor : m_pipeline_profile.get_device().query_sensors()) {
-            for (auto &profile : sensor.get_stream_profiles()) {
-                // All requests have been resolved
-                if (m_stream_requests.empty())
-                    break;
+		LOG4CPP_DEBUG(logger, "Finished opening K4A device.");
 
-                // Find profile matches
-                auto fulfilled_request = std::find_if(m_stream_requests.begin(), m_stream_requests.end(),
-                                                      [profile, this](const stream_request &req) {
-                                                          bool res = false;
-                                                          if ((profile.stream_type() == req._stream_type) &&
-                                                              (profile.format() == req._stream_format) &&
-                                                              (profile.stream_index() == req._stream_idx) &&
-                                                              (profile.fps() == req._fps)) {
-                                                              if (auto vp = profile.as<rs2::video_stream_profile>()) {
-                                                                  if ((vp.width() != req._width) ||
-                                                                      (vp.height() != req._height))
-                                                                      return false;
-                                                              }
-                                                              res = true;
-                                                              m_stream_profile_map[req._port_name] = profile;
-                                                              LOG4CPP_DEBUG(logger, "kinect4azure camera streamprofile found for: " << req._port_name);
-                                                          }
-
-                                                          return res;
-                                                      });
-
-                // Remove the request once resolved
-                if (fulfilled_request != m_stream_requests.end()) {
-                    m_stream_requests.erase(fulfilled_request);
-                }
-            }
-        }
-
-        if (m_selected_stream_profiles.size() == expected_number_of_streams) {
-            LOG4CPP_INFO(logger, "Found matching kinect4azure device.");
-        } else {
-            LOG4CPP_WARN(logger, "Not all stream requests could be satisfied !!!");
-        }
     }
 
     void AzureKinectCameraComponent::retrieveCalibration() {
 
-        if (m_haveColorStream) {
-            std::string portname = "ColorImageOutput";
-            if (m_operation_mode == OPERATION_MODE_PLAYBACK) {
-                // we're in playback mode, read calibfile
-                Ubitrack::Util::readCalibFile(m_cameramodel_color_filename.string(), m_colorCameraModel);
-            } else {
-                if (!get_intrinsics_for_stream(m_stream_profile_map, portname, m_colorCameraModel)) {
-                    LOG4CPP_WARN(logger, "Intrinsics not found for " << portname);
-                } else if (m_operation_mode == OPERATION_MODE_LIVESTREAM_RECORD) {
-                    // we got a calibration from the camera and are in record mode, so write it.
-                    Ubitrack::Util::writeCalibFile(m_cameramodel_color_filename.string(), m_colorCameraModel);
-                }
-            }
-        }
-        if (m_haveDepthStream) {
-            std::string portname = "DepthImageOutput";
-            if (m_operation_mode == OPERATION_MODE_PLAYBACK) {
-                // we're in playback mode, read calibfile
-                Ubitrack::Util::readCalibFile(m_cameramodel_left_filename.string(), m_infraredLeftCameraModel);
-            } else {
-                if (!get_intrinsics_for_stream(m_stream_profile_map, portname, m_infraredLeftCameraModel)) {
-                    LOG4CPP_WARN(logger, "Intrinsics not found for " << portname);
-                } else if (m_operation_mode == OPERATION_MODE_LIVESTREAM_RECORD) {
-                    // we got a calibration from the camera and are in record mode, so write it.
-                    Ubitrack::Util::writeCalibFile(m_cameramodel_left_filename.string(), m_infraredLeftCameraModel);
-                }
-            }
-        } else if (m_haveIRLeftStream) {
-            std::string portname = "IRLeftImageOutput";
-            if (m_operation_mode == OPERATION_MODE_PLAYBACK) {
-                // we're in playback mode, read calibfile
-                Ubitrack::Util::readCalibFile(m_cameramodel_left_filename.string(), m_infraredLeftCameraModel);
-            } else {
-                if (!get_intrinsics_for_stream(m_stream_profile_map, portname, m_infraredLeftCameraModel)) {
-                    LOG4CPP_WARN(logger, "Intrinsics not found for " << portname);
-                } else if (m_operation_mode == OPERATION_MODE_LIVESTREAM_RECORD) {
-                    // we got a calibration from the camera and are in record mode, so write it.
-                    Ubitrack::Util::writeCalibFile(m_cameramodel_left_filename.string(), m_infraredLeftCameraModel);
-                }
-            }
-        }
+		auto calibration = m_device.get_calibration(m_device_config.depth_mode, m_device_config.color_resolution);
 
-//        if (m_haveIRRightStream) {
-//            std::string portname = "IRRightImageOutput";
-//            if (m_operation_mode == OPERATION_MODE_PLAYBACK) {
-//                // we're in playback mode, read calibfile
-//                Ubitrack::Util::readCalibFile(m_cameramodel_right_filename.string(), m_infraredRightCameraModel);
-//            } else {
-//                if (!get_intrinsics_for_stream(m_stream_profile_map, portname, m_infraredRightCameraModel)) {
-//                    LOG4CPP_WARN(logger, "Intrinsics not found for " << portname);
-//                } else if (m_operation_mode == OPERATION_MODE_LIVESTREAM_RECORD) {
-//                    // we got a calibration from the camera and are in record mode, so write it.
-//                    Ubitrack::Util::writeCalibFile(m_cameramodel_right_filename.string(), m_infraredRightCameraModel);
-//                }
-//            }
-//        }
+		get_intrinsics_for_camera(calibration.color_camera_calibration, m_colorCameraModel);
+		if (calibration.depth_mode != K4A_DEPTH_MODE_OFF) {
+			get_intrinsics_for_camera(calibration.depth_camera_calibration, m_depthCameraModel);
+			get_pose_from_extrinsics(calibration.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR], m_depthToColorTransform);
+		}
 
-//        if (m_haveIRRightStream) {
-//            if (m_haveIRLeftStream) {
-//                get_pose_between_streams(m_stream_profile_map, "IRLeftImageOutput", "IRRightImageOutput", m_leftToRightTransform);
-//            } else if (m_haveDepthStream) {
-//                get_pose_between_streams(m_stream_profile_map, "DepthImageOutput", "IRRightImageOutput", m_leftToRightTransform);
-//            }
-//        }
-//
-        if (m_haveColorStream) {
-
-            std::string portname;
-            if (m_haveDepthStream) {
-                portname = "DepthImageOutput";
-            } else if (m_haveIRLeftStream) {
-                portname = "IRLeftImageOutput";
-            }
-
-            if (m_operation_mode == OPERATION_MODE_PLAYBACK) {
-                // we're in playback mode, read calibfile
-                Ubitrack::Util::readCalibFile(m_depth2color_filename.string(), m_leftToColorTransform);
-            } else {
-                if (!get_pose_between_streams(m_stream_profile_map, portname, "ColorImageOutput", m_leftToColorTransform)) {
-                    LOG4CPP_WARN(logger, "IR Left2Color Transform cannot be determined: " << portname);
-                } else if (m_operation_mode == OPERATION_MODE_LIVESTREAM_RECORD) {
-                    // we got a calibration from the camera and are in record mode, so write it.
-                    Ubitrack::Util::writeCalibFile(m_depth2color_filename.string(), m_leftToColorTransform);
-                }
-            }
-        }
-
-        if (m_haveDepthStream) {
-            if (auto dpt_sensor = m_pipeline_profile.get_device().first<rs2::depth_sensor>()) {
-                // retrieve depth scaling from sensor like this:
-                //A Depth stream contains an image that is composed of pixels with depth information.
-                //The value of each pixel is the distance from the camera, in some distance units.
-                //To get the distance in units of meters, each pixel's value should be multiplied by the sensor's depth scale
-                //Here is the way to grab this scale value for a "depth" sensor:
-                float scale = dpt_sensor.get_depth_scale();
-                LOG4CPP_INFO(logger, "Scale factor for the kinect4azure depth sensor is: " << scale);
-            }
-        }
     }
 
     void AzureKinectCameraComponent::setOptions() {
-        /** D435 Options
-            setting options works on sensors not on streams.
-            not sure how to implement this in a useful way
-
-            Options for Stereo Module
-             Supported options:                                    min        max       step  default
-                Exposure                                           : 20   ... 166000      20    8500
-                Gain                                               : 16   ... 248         1     16
-                Enable Auto Exposure                               : 0    ... 1           1     1
-                Visual Preset                                      : 0    ... 6           1     0
-                Laser Power                                        : 0    ... 360         30    150
-                Emitter Enabled                                    : 0    ... 2           1     1
-                Frames Queue Size                                  : 0    ... 32          1     16
-                Error Polling Enabled                              : 0    ... 1           1     0
-                Output Trigger Enabled                             : 0    ... 1           1     0
-                Depth Units                                        : 0.0001... 0.01        1e-06 0.001
-                Stereo Baseline                                    : 49.9954... 49.9954     0     49.9954
-
-            Options for RGB Camera
-             Supported options:                                    min        max       step  default
-                Backlight Compensation                             : 0    ... 1           1     0
-                Brightness                                         : -64  ... 64          1     0
-                Contrast                                           : 0    ... 100         1     50
-                Exposure                                           : 41   ... 10000       1     166
-                Gain                                               : 0    ... 128         1     64
-                Gamma                                              : 100  ... 500         1     300
-                Hue                                                : -180 ... 180         1     0
-                Saturation                                         : 0    ... 100         1     64
-                Sharpness                                          : 0    ... 100         1     50
-                White Balance                                      : 2800 ... 6500        10    4600
-                Enable Auto Exposure                               : 0    ... 1           1     1
-                Enable Auto White Balance                          : 0    ... 1           1     1
-                Frames Queue Size                                  : 0    ... 32          1     16
-                Power Line Frequency                               : 0    ... 2           1     3
-                Auto Exposure Priority                             : 0    ... 1           1     0
+        /** Kinect for Azure Options:
+			K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE = 0,
+			K4A_COLOR_CONTROL_AUTO_EXPOSURE_PRIORITY,
+			K4A_COLOR_CONTROL_BRIGHTNESS,
+			K4A_COLOR_CONTROL_CONTRAST,
+			K4A_COLOR_CONTROL_SATURATION,
+			K4A_COLOR_CONTROL_SHARPNESS,
+			K4A_COLOR_CONTROL_WHITEBALANCE,
+			K4A_COLOR_CONTROL_BACKLIGHT_COMPENSATION,
+			K4A_COLOR_CONTROL_GAIN,
+			K4A_COLOR_CONTROL_POWERLINE_FREQUENCY
          */
 
-        for (auto&& sensor : m_pipeline_profile.get_device().query_sensors()) {
-            if (rs2::depth_sensor dpt_sensor = sensor.as<rs2::depth_sensor>())
-            {
-                // depth sensor options
-                dpt_sensor.set_option(rs2_option::RS2_OPTION_LASER_POWER, m_depthLaserPower);
-                dpt_sensor.set_option(rs2_option::RS2_OPTION_EMITTER_ENABLED, m_depthEmitterEnabled);
-                dpt_sensor.set_option(rs2_option::RS2_OPTION_GAIN, m_infraredGain);
-
-                // set hw sync mode
-                dpt_sensor.set_option(rs2_option::RS2_OPTION_INTER_CAM_SYNC_MODE, m_hwsync_mode);
-            } else {
-                // color sensor options ?
-            }
-        }
+		// not yet implemented
 
     }
 
@@ -641,198 +373,174 @@ namespace Ubitrack { namespace Drivers {
 
         setupDevice();
         retrieveCalibration();
-        if (m_operation_mode != OPERATION_MODE_PLAYBACK) {
-            setOptions();
-        }
-
-        if (m_operation_mode == OPERATION_MODE_LIVESTREAM_RECORD) {
-            LOG4CPP_DEBUG(logger, "Open Timestamp Filename:" << m_timestamp_filename.string());
-            m_timestamp_filebuffer.open ( m_timestamp_filename.string().c_str(), std::ios::out );
-            if( !m_timestamp_filebuffer.is_open()  ) {
-                UBITRACK_THROW("Error opening timestamp file" );
-            }
-        }
+        setOptions();
 
         // Start streaming
-        m_pipeline->start(m_pipeline_config, [this](rs2::frame f)
-        {
-            handleFrame(f);
-        });
+		LOG4CPP_DEBUG(logger, "Starting capturing thread");
+		m_running = true;
+		m_pCaptureThread = boost::shared_ptr< boost::thread >(new boost::thread(boost::bind(&AzureKinectCameraComponent::threadFunc, this)));
 
     }
 
-    void AzureKinectCameraComponent::handleFrame(rs2::frame frame) {
 
-        // convert from frame timestamp (milliseconds, double) to Measurement::Timestamp (nanoseconds, unsigned long long)
-        auto ts = (Measurement::Timestamp)(frame.get_timestamp() * 1000000);
+	void AzureKinectCameraComponent::threadFunc() {
 
-        // write the corresponding timestamp to a file
-        std::ostream os( &m_timestamp_filebuffer );
-        os << ts << " " << frame.get_frame_number() << std::endl;
 
-        if (rs2::frameset fs = frame.as<rs2::frameset>())
-        {
-            // With callbacks, all synchronized stream will arrive in a single frameset
-            for (auto&& f : fs) {
-                rs2_stream stream_type = f.get_profile().stream_type();
-                int stream_index = f.get_profile().stream_index();
+		while (m_running) {
 
-                LOG4CPP_TRACE(logger, "Received Frame type: " << stream_type << " idx: " << stream_index);
+			// decide based on framerate how long we should wait.
+			std::chrono::milliseconds waitms = std::chrono::milliseconds(0);
+			switch (m_frameRate) {
+			case K4A_FRAMES_PER_SECOND_5:
+				waitms = std::chrono::milliseconds(1000 / 5);
+			case K4A_FRAMES_PER_SECOND_15:
+				waitms = std::chrono::milliseconds(1000 / 15);
+			case K4A_FRAMES_PER_SECOND_30:
+				waitms = std::chrono::milliseconds(1000 / 30);
+			default:
+				break;
+			}
 
-                if (stream_type == rs2_stream::RS2_STREAM_COLOR) {
-                    if (auto vf = f.as<rs2::video_frame>()) {
-                        auto imageFormatProperties = getImageFormatPropertiesFromRS2Frame(f);
+			k4a::capture capture;
+			if (m_device.get_capture(&capture, waitms))
+			{
+				
+				const k4a::image depthImage = capture.get_depth_image();
+				if (depthImage) { 
+					handleDepthFrame(depthImage);
+				} else { 
+					/* ignore the image */ 
+				}
 
-                        int w = vf.get_width();
-                        int h = vf.get_height();
 
-                        // need to copy image here.
-                        auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void *) f.get_data(),
-                                             cv::Mat::AUTO_STEP).clone();
+				const k4a::image colorImage = capture.get_color_image();
+				if (colorImage) {
+					handleColorFrame(colorImage);
+				}
+				else {
+					/* ignore the image */
+				}
+			}
+		}
+	}
 
-                        if (m_outputColorImagePort.isConnected()) {
-                            boost::shared_ptr<Vision::Image> pColorImage(new Vision::Image(image));
-                            pColorImage->set_pixelFormat(imageFormatProperties.imageFormat);
-                            pColorImage->set_origin(imageFormatProperties.origin);
+	void AzureKinectCameraComponent::handleDepthFrame(k4a::image frame) {
 
-                            if (m_autoGPUUpload) {
-                                Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
-                                if (oclManager.isInitialized()) {
-                                    //force upload to the GPU
-                                    pColorImage->uMat();
-                                }
-                            }
-                            m_outputColorImagePort.send(Measurement::ImageMeasurement(ts, pColorImage));
-                        }
+		auto ts = Measurement::Timestamp(frame.get_system_timestamp().count());
 
-                        if (m_outputGreyImagePort.isConnected()) {
-                            cv::Mat grayImage;
-                            cv::cvtColor(image, grayImage, cv::COLOR_RGB2GRAY);
-                            boost::shared_ptr<Vision::Image> pGreyImage(new Vision::Image(grayImage));
-                            pGreyImage->set_pixelFormat(imageFormatProperties.imageFormat);
-                            pGreyImage->set_origin(imageFormatProperties.origin);
+		// need to figure out how to compute pointcloud => look at k4a::transformation class, seems to be a good start ..
 
-                            if (m_autoGPUUpload) {
-                                Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
-                                if (oclManager.isInitialized()) {
-                                    //force upload to the GPU
-                                    pGreyImage->uMat();
-                                }
-                            }
-                            m_outputGreyImagePort.send(Measurement::ImageMeasurement(ts, pGreyImage));
-                        }
+		//if (m_outputPointCloudPort.isConnected()) {
+		//	// Declare pointcloud object, for calculating pointclouds and texture mappings
+		//	rs2::pointcloud pc;
 
-                        
-                    } else {
-                        LOG4CPP_WARN(logger, "Expected Video-Frame but cannot cast.");
-                    }
-                } else if (stream_type == rs2_stream::RS2_STREAM_INFRARED) {
-                    if (auto vf = f.as<rs2::video_frame>()) {
-                        auto imageFormatProperties = getImageFormatPropertiesFromRS2Frame(f);
+		//	// Generate the pointcloud and texture mappings
+		//	rs2::points points = pc.calculate(df);
 
-                        int w = vf.get_width();
-                        int h = vf.get_height();
+		//	// Tell pointcloud object to map to this color frame
+		//	// @todo: currently no access to the color image .. now sure how to achieve this with the current structure ..
+		//	// pc.map_to(color);
 
-                        // need to copy image here.
-                        auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void *) f.get_data(),
-                                             cv::Mat::AUTO_STEP).clone();
+		//	auto vertices = points.get_vertices();
 
-                        // Left IR Image
-                        if (m_outputIRLeftImagePort.isConnected() && (stream_index == 1)) {
-                            boost::shared_ptr<Vision::Image> pInfraredImage(new Vision::Image(image));
-                            pInfraredImage->set_pixelFormat(imageFormatProperties.imageFormat);
-                            pInfraredImage->set_origin(imageFormatProperties.origin);
+		//	Math::Vector3d init_pos(0, 0, 0);
+		//	boost::shared_ptr < std::vector<Math::Vector3d> > pPointCloud = boost::make_shared< std::vector<Math::Vector3d> >(points.size(), init_pos);
 
-                            if (m_autoGPUUpload) {
-                                Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
-                                if (oclManager.isInitialized()) {
-                                    //force upload to the GPU
-                                    pInfraredImage->uMat();
-                                }
-                            }
-                            m_outputIRLeftImagePort.send(Measurement::ImageMeasurement(ts, pInfraredImage));
-                        }
+		//	for (size_t i = 0; i < points.size(); i++) {
+		//		Math::Vector3d& p = pPointCloud->at(i);
 
-                        // Right IR Image
-//                if (m_outputIRRightImagePort.isConnected() && (stream_index == 2)) {
-//                    boost::shared_ptr<Vision::Image> pInfraredImage(new Vision::Image(image));
-//                    pInfraredImage->set_pixelFormat(imageFormatProperties.imageFormat);
-//                    pInfraredImage->set_origin(imageFormatProperties.origin);
-//
-//                    if (m_autoGPUUpload) {
-//                        Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
-//                        if (oclManager.isInitialized()) {
-//                            //force upload to the GPU
-//                            pInfraredImage->uMat();
-//                        }
-//                    }
-//                    m_outputIRRightImagePort.send(Measurement::ImageMeasurement(ts, pInfraredImage));
-//                }
-                    }
-                } else if (stream_type == rs2_stream::RS2_STREAM_DEPTH) {
-                    if (auto df = f.as<rs2::depth_frame>())
-                    {
-                        if (m_outputPointCloudPort.isConnected()) {
-                            // Declare pointcloud object, for calculating pointclouds and texture mappings
-                            rs2::pointcloud pc;
+		//		if (vertices[i].z != 0.)
+		//		{
+		//			p[0] = vertices[i].x;
+		//			p[1] = vertices[i].y;
+		//			p[2] = vertices[i].z;
+		//		}
+		//		else {
+		//			p[0] = p[1] = p[2] = 0.;
+		//		}
+		//	}
+		//	m_outputPointCloudPort.send(Measurement::PositionList(ts, pPointCloud));
+		//}
 
-                            // Generate the pointcloud and texture mappings
-                            rs2::points points = pc.calculate(df);
+		if (m_outputDepthMapImagePort.isConnected()) {
 
-                            // Tell pointcloud object to map to this color frame
-                            // @todo: currently no access to the color image .. now sure how to achieve this with the current structure ..
-                            // pc.map_to(color);
+			auto imageFormatProperties = getImageFormatPropertiesFromK4AImage(frame);
 
-                            auto vertices = points.get_vertices();
+			int w = frame.get_width_pixels();
+			int h = frame.get_height_pixels();
 
-                            Math::Vector3d init_pos(0, 0, 0);
-                            boost::shared_ptr < std::vector<Math::Vector3d> > pPointCloud = boost::make_shared< std::vector<Math::Vector3d> >(points.size(), init_pos);
+			// need to copy image here.
+			auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void*)frame.get_buffer(), cv::Mat::AUTO_STEP).clone();
 
-                            for (size_t i = 0; i < points.size(); i++) {
-                                Math::Vector3d& p = pPointCloud->at(i);
+			boost::shared_ptr< Vision::Image > pDepthImage(new Vision::Image(image));
+			pDepthImage->set_pixelFormat(imageFormatProperties.imageFormat);
+			pDepthImage->set_origin(imageFormatProperties.origin);
 
-                                if (vertices[i].z != 0.)
-                                {
-                                    p[0] = vertices[i].x;
-                                    p[1] = vertices[i].y;
-                                    p[2] = vertices[i].z;
-                                } else {
-                                    p[0] = p[1] = p[2] = 0.;
-                                }
-                            }
-                            m_outputPointCloudPort.send(Measurement::PositionList(ts, pPointCloud));
-                        }
+			if (m_autoGPUUpload) {
+				Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
+				if (oclManager.isInitialized()) {
+					//force upload to the GPU
+					pDepthImage->uMat();
+				}
+			}
+			m_outputDepthMapImagePort.send(Measurement::ImageMeasurement(ts, pDepthImage));
+		}
 
-                        if (m_outputDepthMapImagePort.isConnected()) {
 
-                            auto imageFormatProperties = getImageFormatPropertiesFromRS2Frame(f);
 
-                            int w = df.get_width();
-                            int h = df.get_height();
+	}
 
-                            // need to copy image here.
-                            auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void*)f.get_data(), cv::Mat::AUTO_STEP).clone();
 
-                            boost::shared_ptr< Vision::Image > pDepthImage(new Vision::Image(image));
-                            pDepthImage->set_pixelFormat(imageFormatProperties.imageFormat);
-                            pDepthImage->set_origin(imageFormatProperties.origin);
 
-                            if (m_autoGPUUpload) {
-                                Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
-                                if (oclManager.isInitialized()) {
-                                    //force upload to the GPU
-                                    pDepthImage->uMat();
-                                }
-                            }
-                            m_outputDepthMapImagePort.send(Measurement::ImageMeasurement(ts, pDepthImage));
-                        }
-                    }
 
-                } else {
-                    LOG4CPP_WARN(logger, "Stream type is not known.");
-                }
-            }
-        }
+
+
+	void AzureKinectCameraComponent::handleColorFrame(k4a::image frame) {
+
+		auto ts = Measurement::Timestamp(frame.get_system_timestamp().count());
+		auto imageFormatProperties = getImageFormatPropertiesFromK4AImage(frame);
+
+		int w = frame.get_width_pixels();
+		int h = frame.get_height_pixels();
+
+		// need to copy image here.
+		auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void *)frame.get_buffer(), cv::Mat::AUTO_STEP).clone();
+
+		if (m_outputColorImagePort.isConnected()) {
+			boost::shared_ptr<Vision::Image> pColorImage(new Vision::Image(image));
+			pColorImage->set_pixelFormat(imageFormatProperties.imageFormat);
+			pColorImage->set_origin(imageFormatProperties.origin);
+
+			if (m_autoGPUUpload) {
+				Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
+				if (oclManager.isInitialized()) {
+					//force upload to the GPU
+					pColorImage->uMat();
+				}
+			}
+			m_outputColorImagePort.send(Measurement::ImageMeasurement(ts, pColorImage));
+		}
+
+		if (m_outputGreyImagePort.isConnected()) {
+			cv::Mat grayImage;
+			cv::cvtColor(image, grayImage, cv::COLOR_RGB2GRAY);
+			boost::shared_ptr<Vision::Image> pGreyImage(new Vision::Image(grayImage));
+			pGreyImage->set_pixelFormat(imageFormatProperties.imageFormat);
+			pGreyImage->set_origin(imageFormatProperties.origin);
+
+			if (m_autoGPUUpload) {
+				Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
+				if (oclManager.isInitialized()) {
+					//force upload to the GPU
+					pGreyImage->uMat();
+				}
+			}
+			m_outputGreyImagePort.send(Measurement::ImageMeasurement(ts, pGreyImage));
+		}
+
+
+		// not implemented IR Stream ??
+
     }
 
     void AzureKinectCameraComponent::stop()
@@ -842,7 +550,7 @@ namespace Ubitrack { namespace Drivers {
             m_running = false;
             LOG4CPP_INFO( logger, "Trying to stop kinect4azure module");
 
-            m_pipeline->stop();
+			m_pCaptureThread->join();
 
             teardownDevice();
         }
@@ -850,14 +558,14 @@ namespace Ubitrack { namespace Drivers {
 
     void AzureKinectCameraComponent::teardownDevice()
     {
-        m_pipeline.reset();
+		m_device.close();
     }
 
 
 // register component at factory
     UBITRACK_REGISTER_COMPONENT( Dataflow::ComponentFactory* const cf )
     {
-        cf->registerComponent< Ubitrack::Drivers::AzureKinectCameraComponent > ( "kinect4azureCamera" );
+        cf->registerComponent< Ubitrack::Drivers::AzureKinectCameraComponent > ( "Kinect4AzureCamera" );
     }
 
 } } // namespace Ubitrack::Drivers
