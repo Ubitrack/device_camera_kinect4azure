@@ -337,18 +337,25 @@ namespace Ubitrack { namespace Drivers {
 
 		bool found_device = false;
 		LOG4CPP_DEBUG(logger, "Found " << int(device_count) << " connected devices:");
-		for (uint8_t deviceIndex = 0; deviceIndex < device_count; deviceIndex++)
-		{
-			auto candidate = k4a::device::open(deviceIndex);
-			auto serialnr = candidate.get_serialnum();
-			if (m_serialNumber == serialnr) {
-				LOG4CPP_INFO(logger, "Found Azure Kinect with Serial: " << serialnr);
-				found_device = true;
-				m_device = std::move(candidate);
-				break;
-			}
-			else {
-				LOG4CPP_DEBUG(logger, "Found Azure Kinect with NON MATCHING Serial: " << serialnr);
+
+		if (m_serialNumber == "") {
+			m_device = k4a::device::open(0);
+			found_device = true;
+		}
+		else {
+			for (uint8_t deviceIndex = 0; deviceIndex < device_count; deviceIndex++)
+			{
+				auto candidate = k4a::device::open(deviceIndex);
+				auto serialnr = candidate.get_serialnum();
+				if (m_serialNumber == serialnr) {
+					LOG4CPP_INFO(logger, "Found Azure Kinect with Serial: " << serialnr);
+					found_device = true;
+					m_device = std::move(candidate);
+					break;
+				}
+				else {
+					LOG4CPP_DEBUG(logger, "Found Azure Kinect with NON MATCHING Serial: " << serialnr);
+				}
 			}
 		}
 

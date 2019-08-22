@@ -96,10 +96,10 @@
             <UbitrackLib class="Kinect4AzureCamera" />
 
             <Attribute name="k4aSerialNumber" xsi:type="StringAttributeReferenceType"/>
-            <Attribute name="k4aDepthMode" value="STANDALONE" xsi:type="EnumAttributeReferenceType"/>
+            <Attribute name="k4aDepthMode" value="NFOV_2X2BINNED" xsi:type="EnumAttributeReferenceType"/>
 
             <Attribute name="k4aColorVideoResolution" value="1536P" xsi:type="EnumAttributeReferenceType"/>
-            <Attribute name="k4aColorImageFormat" value="BGRA32" xsi:type="EnumAttributeReferenceType"/>
+            <Attribute name="k4aColorImageFormat" value="COLOR_BGRA32" xsi:type="EnumAttributeReferenceType"/>
 
             <Attribute name="k4aFrameRate" default="30" displayName="Frame Rate" xsi:type="IntAttributeDeclarationType"/>
 
@@ -173,7 +173,7 @@
             <Description><p xmlns="http://www.w3.org/1999/xhtml">Serial Number of the kinect4azure Device.</p></Description>
         </Attribute>
 
-        <Attribute name="k4aColorImageFormat" displayName="Color Image Format" default="BGRA32" xsi:type="EnumAttributeDeclarationType">
+        <Attribute name="k4aColorImageFormat" displayName="Color Image Format" default="COLOR_BGRA32" xsi:type="EnumAttributeDeclarationType">
             <Description>
                 <h:p>
                     Select Color Image Format.
