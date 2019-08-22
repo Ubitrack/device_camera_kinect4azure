@@ -169,7 +169,7 @@
         <xi:include href="file:GlobalAttrSpec.xml" xpointer="element(/1/3/1)" />
         <xi:include href="file:GlobalAttrSpec.xml" xpointer="element(/1/3/2)" />
 
-        <Attribute name="rsSerialNumber" displayName="kinect4azure Serial Number" default="" xsi:type="StringAttributeDeclarationType">
+        <Attribute name="k4aSerialNumber" displayName="kinect4azure Serial Number" default="" xsi:type="StringAttributeDeclarationType">
             <Description><p xmlns="http://www.w3.org/1999/xhtml">Serial Number of the kinect4azure Device.</p></Description>
         </Attribute>
 
