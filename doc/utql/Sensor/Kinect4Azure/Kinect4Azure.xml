@@ -13,49 +13,38 @@
             </h:p>
         </Description>
         <Output>
-            <Node name="IRCameraLeft" displayName="Left IR Camera" >
-                <Description><p xmlns="http://www.w3.org/1999/xhtml">kinect4azure Left IR Camera</p></Description>
+            <Node name="DepthCamera" displayName="Depth Camera" >
+                <Description><p xmlns="http://www.w3.org/1999/xhtml">Kinect4Azure Depth Camera</p></Description>
             </Node>
-            <!--<Node name="IRCameraRight" displayName="Right IR Camera" >-->
-                <!--<Description><p xmlns="http://www.w3.org/1999/xhtml">kinect4azure Right IR Camera</p></Description>-->
-            <!--</Node>-->
             <Node name="ColorCamera" displayName="Color Camera" >
-                <Description><p xmlns="http://www.w3.org/1999/xhtml">kinect4azure Color Camera</p></Description>
+                <Description><p xmlns="http://www.w3.org/1999/xhtml">Kinect4Azure Color Camera</p></Description>
             </Node>
-            <Node name="IRImagePlaneLeft" displayName="IR Image Plane Left" />
-            <!--<Node name="IRImagePlaneRight" displayName="IR Image Plane Right" />-->
+            <Node name="DepthImagePlane" displayName="Depth Image Plane" />
             <Node name="ColorImagePlane" displayName="Color Image Plane" />
             <Node name="PointCloud" displayName="3D Point Cloud" />
 
-            <Edge name="IRLeftIntrinsics" source="IRCameraLeft" destination="IRImagePlaneLeft" displayName="IR Camera Intrinsics Left">
+            <Edge name="DepthIntrinsics" source="DepthCamera" destination="DepthImagePlane" displayName="Depth Camera Intrinsics">
                 <Description>
-                    <h:p>The intrinsic IR camera matrix left.</h:p>
+                    <h:p>The intrinsic Depth camera matrix.</h:p>
                 </Description>
                 <Attribute name="type" value="3x3Matrix" xsi:type="EnumAttributeReferenceType"/>
                 <Attribute name="mode" value="pull" xsi:type="EnumAttributeReferenceType"/>
             </Edge>
-            <Edge name="IRLeftCameraModel" source="IRCameraLeft"    destination="IRImagePlaneLeft" displayName="IR Camera Model Left">
+            <Edge name="DepthCameraModel" source="DepthCamera"    destination="DepthImagePlane" displayName="Depth Camera Model">
                 <Description>
-                    <h:p>The IR camera model left.</h:p>
+                    <h:p>The depth camera model.</h:p>
                 </Description>
                 <Attribute name="type" value="Intrinsics" xsi:type="EnumAttributeReferenceType"/>
                 <Attribute name="mode" value="pull" xsi:type="EnumAttributeReferenceType"/>
             </Edge>
-            <Edge name="IRLeftImageOutput" source="IRCameraLeft" destination="IRImagePlaneLeft" displayName="IR Image Left">
+            <Edge name="DepthImageOutput" source="DepthCamera" destination="DepthImagePlane" displayName="Depth Image">
                 <Description>
-                    <h:p>The output image.</h:p>
+                    <h:p>The depth image.</h:p>
                 </Description>
                 <Attribute name="type" value="Image" xsi:type="EnumAttributeReferenceType"/>
                 <Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>
             </Edge>
-            <Edge name="DepthImageOutput" source="IRCameraLeft" destination="IRImagePlaneLeft" displayName="Output Depth Image">
-                <Description>
-                    <h:p>The output depth image.</h:p>
-                </Description>
-                <Attribute name="type" value="Image" xsi:type="EnumAttributeReferenceType"/>
-                <Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>
-            </Edge>
-            <Edge name="PointCloudOutput" source="IRCameraLeft" destination="PointCloud" displayName="Output PointCloud">
+            <Edge name="PointCloudOutput" source="DepthCamera" destination="PointCloud" displayName="Output PointCloud">
                 <Description>
                     <h:p>The output point cloud.</h:p>
                 </Description>
@@ -63,42 +52,21 @@
                 <Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>
             </Edge>
 
-            <!--<Edge name="IRRightIntrinsics" source="IRCameraRight" destination="IRImagePlaneRight" displayName="IR Camera Intrinsics Right">-->
-                <!--<Description>-->
-                    <!--<h:p>The intrinsic IR camera matrix right.</h:p>-->
-                <!--</Description>-->
-                <!--<Attribute name="type" value="3x3Matrix" xsi:type="EnumAttributeReferenceType"/>-->
-                <!--<Attribute name="mode" value="pull" xsi:type="EnumAttributeReferenceType"/>-->
-            <!--</Edge>-->
-            <!--<Edge name="RightCameraModel" source="IRCameraRight"    destination="IRImagePlaneRight" displayName="IR Camera Model Right">-->
-                <!--<Description>-->
-                    <!--<h:p>The IR camera model right.</h:p>-->
-                <!--</Description>-->
-                <!--<Attribute name="type" value="Intrinsics" xsi:type="EnumAttributeReferenceType"/>-->
-                <!--<Attribute name="mode" value="pull" xsi:type="EnumAttributeReferenceType"/>-->
-            <!--</Edge>-->
-            <!--<Edge name="IRRightImageOutput" source="IRCameraRight" destination="IRImagePlaneRight" displayName="IR Image Right">-->
-                <!--<Description>-->
-                    <!--<h:p>The output image.</h:p>-->
-                <!--</Description>-->
-                <!--<Attribute name="type" value="Image" xsi:type="EnumAttributeReferenceType"/>-->
-                <!--<Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>-->
-            <!--</Edge>-->
-
-            <Edge name="ColorIntrinsics" source="ColorCamera" destination="ColorImagePlane" displayName="Color Camera Intrinsics Right">
+            <Edge name="ColorIntrinsics" source="ColorCamera" destination="ColorImagePlane" displayName="Color Camera Intrinsics">
                 <Description>
                     <h:p>The intrinsic color camera matrix.</h:p>
                 </Description>
                 <Attribute name="type" value="3x3Matrix" xsi:type="EnumAttributeReferenceType"/>
                 <Attribute name="mode" value="pull" xsi:type="EnumAttributeReferenceType"/>
             </Edge>
-            <Edge name="ColorCameraModel" source="ColorCamera"    destination="ColorImagePlane" displayName="Color Camera Model Right">
+            <Edge name="ColorCameraModel" source="ColorCamera"    destination="ColorImagePlane" displayName="Color Camera Model">
                 <Description>
                     <h:p>The color camera model.</h:p>
                 </Description>
                 <Attribute name="type" value="Intrinsics" xsi:type="EnumAttributeReferenceType"/>
                 <Attribute name="mode" value="pull" xsi:type="EnumAttributeReferenceType"/>
             </Edge>
+
             <Edge name="ColorImageOutput" source="ColorCamera" destination="ColorImagePlane" displayName="Output Color Image">
                 <Description>
                     <h:p>The output image.</h:p>
@@ -106,6 +74,7 @@
                 <Attribute name="type" value="Image" xsi:type="EnumAttributeReferenceType"/>
                 <Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>
             </Edge>
+            
             <Edge name="GreyImageOutput" source="ColorCamera" destination="ColorImagePlane" displayName="Output Grey Image">
                 <Description>
                     <h:p>The output grey image.</h:p>
@@ -114,16 +83,9 @@
                 <Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>
             </Edge>
 
-            <!--<Edge name="LeftToRightTransform" source="IRCameraLeft" destination="IRCameraRight" displayName="IR Camera Left To Right Transform">-->
-                <!--<Description>-->
-                    <!--<h:p>The left IR camera to right IR camera transform.</h:p>-->
-                <!--</Description>-->
-                <!--<Attribute name="type" value="6D" xsi:type="EnumAttributeReferenceType"/>-->
-                <!--<Attribute name="mode" value="pull" xsi:type="EnumAttributeReferenceType"/>-->
-            <!--</Edge>-->
-            <Edge name="LeftToColorTransform" source="IRCameraLeft" destination="ColorCamera" displayName="IR Camera Left To Color Camera Transform">
+            <Edge name="DepthToColorTransform" source="DepthCamera" destination="ColorCamera" displayName="Depth Camera To Color Camera Transform">
                 <Description>
-                    <h:p>The left IR camera to color camera transform.</h:p>
+                    <h:p>The depth camera to color camera transform.</h:p>
                 </Description>
                 <Attribute name="type" value="6D" xsi:type="EnumAttributeReferenceType"/>
                 <Attribute name="mode" value="pull" xsi:type="EnumAttributeReferenceType"/>
@@ -133,41 +95,44 @@
         <DataflowConfiguration>
             <UbitrackLib class="Kinect4AzureCamera" />
 
-            <Attribute name="rsSerialNumber" xsi:type="StringAttributeReferenceType"/>
-            <Attribute name="rsOperationMode" value="LIVESTREAM" xsi:type="EnumAttributeReferenceType"/>
+            <Attribute name="k4aSerialNumber" xsi:type="StringAttributeReferenceType"/>
+            <Attribute name="k4aDepthMode" value="STANDALONE" xsi:type="EnumAttributeReferenceType"/>
 
-            <Attribute name="rsColorVideoStreamFormat" value="BGR8" xsi:type="EnumAttributeReferenceType"/>
-            <Attribute name="rsColorVideoResolution" value="1280x720" xsi:type="EnumAttributeReferenceType"/>
+            <Attribute name="k4aColorVideoResolution" value="1536P" xsi:type="EnumAttributeReferenceType"/>
+            <Attribute name="k4aColorImageFormat" value="BGRA32" xsi:type="EnumAttributeReferenceType"/>
 
-            <Attribute name="rsInfraredVideoStreamFormat" value="Y8" xsi:type="EnumAttributeReferenceType"/>
+            <Attribute name="k4aFrameRate" default="30" displayName="Frame Rate" xsi:type="IntAttributeDeclarationType"/>
 
-            <Attribute name="rsDepthResolution" value="848x480" xsi:type="EnumAttributeReferenceType"/>
+            <Attribute name="k4aWiredSyncMode" value="STANDALONE" xsi:type="EnumAttributeReferenceType"/>
 
-            <Attribute name="rsFrameRate" default="30" displayName="Frame Rate" xsi:type="IntAttributeDeclarationType"/>
-
+          <!--
             <Attribute name="rsLaserPower" default="150" displayName="Laser Power" xsi:type="IntAttributeDeclarationType"/>
             <Attribute name="rsInfraredGain" default="16" displayName="IR Camera Gain" xsi:type="IntAttributeDeclarationType"/>
-
-            <Attribute name="rsHardwareSync" value="DEFAULT" xsi:type="EnumAttributeReferenceType"/>
-
-            <Attribute name="rsEmitterEnabled" displayName="Emitter Enabled" default="1" xsi:type="EnumAttributeDeclarationType">
-                <Description>
-                    <h:p>
-                        Enable the Laser Emitter. Turning of the emitter can be useful for calibration with IR cameras.
-                    </h:p>
-                </Description>
-                <EnumValue name="0" displayName="False"/>
-                <EnumValue name="1"  displayName="True"/>
+          --> 
+          
+            <Attribute name="k4aDelayOffColorUsec" displayName="Delay off Color (usec)" default="0" xsi:type="IntAttributeDeclarationType"/>
+            <Attribute name="k4aSubordinateDelayOffMaster" displayName="Subordinate Delay off Master" default="0" xsi:type="IntAttributeDeclarationType"/>
+            <Attribute name="k4aSynchronizedImagesOnly" displayName="Synchronized Images Only" default="true" xsi:type="EnumAttributeDeclarationType">
+              <Description>
+                <h:p>
+                  Only receive pairs (depth/color) of images that were captures at the same time.
+                </h:p>
+              </Description>
+              <EnumValue name="false" displayName="False"/>
+              <EnumValue name="true"  displayName="True"/>
+            </Attribute>
+            <Attribute name="k4aDisableStreamingIndicator" displayName="" default="false" xsi:type="EnumAttributeDeclarationType">
+              <Description>
+                <h:p>
+                  Disable Streaming Indicator LED at the front.
+                </h:p>
+              </Description>
+              <EnumValue name="false" displayName="False"/>
+              <EnumValue name="true"  displayName="True"/>
             </Attribute>
 
-            <Attribute name="rsRosBagFilename" displayName="Filename ROS Bag" default="rscapture.bag" xsi:type="PathAttributeDeclarationType"/>
-            <Attribute name="rsTimestampFilename" displayName="Filename Timestamp" default="rscapture_timestamps.txt" xsi:type="PathAttributeDeclarationType"/>
-            <Attribute name="rsCameraModelLeftFilename" displayName="Filename CameraModel Left" default="rscapture_cameramodel_left.calib" xsi:type="PathAttributeDeclarationType"/>
-            <Attribute name="rsCameraModelColorFilename" displayName="Filename CameraModel Color" default="rscapture_cameramodel_color.calib" xsi:type="PathAttributeDeclarationType"/>
-            <Attribute name="rsDepth2ColorFilename" displayName="Filename Depth2Color Transform" default="rscapture_depth2color.calib" xsi:type="PathAttributeDeclarationType"/>
 
-
-            <Attribute name="uploadImageOnGPU" displayName="Automatic Upload on GPU" default="false" xsi:type="EnumAttributeDeclarationType">
+          <Attribute name="uploadImageOnGPU" displayName="Automatic Upload on GPU" default="false" xsi:type="EnumAttributeDeclarationType">
                 <Description>
                     <h:p>
                         Each grabbed Image is automatically uploaded to the GPU for further processing. Attention: Uploading and downloading images from the GPU is time consuming.
@@ -208,87 +173,78 @@
             <Description><p xmlns="http://www.w3.org/1999/xhtml">Serial Number of the kinect4azure Device.</p></Description>
         </Attribute>
 
-        <Attribute name="rsColorVideoStreamFormat" displayName="Color Video Stream Format" default="BGR8" xsi:type="EnumAttributeDeclarationType">
+        <Attribute name="k4aColorImageFormat" displayName="Color Image Format" default="BGRA32" xsi:type="EnumAttributeDeclarationType">
             <Description>
                 <h:p>
-                    Select Color Video Stream Format.
+                    Select Color Image Format.
                 </h:p>
             </Description>
 
-            <EnumValue name="RGB8" displayName="RGB8"/>
-            <EnumValue name="BGR8" displayName="BGR8"/>
-            <EnumValue name="RGBA8" displayName="RGBA8"/>
-            <EnumValue name="BGRA8" displayName="BGRA8"/>
-            <EnumValue name="YUYV" displayName="YUYV"/>
-            <EnumValue name="Y16" displayName="Y16"/>
+            <EnumValue name="COLOR_MJPG" displayName="MJPG"/>
+            <EnumValue name="COLOR_NV12" displayName="NV12"/>
+            <EnumValue name="COLOR_YUY2" displayName="YUV2"/>
+            <EnumValue name="COLOR_BGRA32" displayName="BGRA32"/>
+          <!--
+            <EnumValue name="DEPTH16" displayName="DEPTH16"/>
+            <EnumValue name="IR16" displayName="IR16"/>
+            <EnumValue name="CUSTOM8" displayName="CUSTOM8"/>
+            <EnumValue name="CUSTOM16" displayName="CUSTOM16"/>
+            <EnumValue name="CUSTOM" displayName="CUSTOM"/>
+            -->
         </Attribute>
 
-        <Attribute name="rsInfraredVideoStreamFormat" displayName="Infrared Video Stream Format" default="BGR8" xsi:type="EnumAttributeDeclarationType">
-            <Description>
-                <h:p>
-                    Select Infrared Video Stream Format.
-                </h:p>
-            </Description>
-
-            <EnumValue name="Y8" displayName="Y8"/>
-            <EnumValue name="Y16" displayName="Y16"/>
-        </Attribute>
-
-        <Attribute name="rsColorVideoResolution" displayName="Color Video Stream Resolution" default="1920x1080" xsi:type="EnumAttributeDeclarationType">
+        <Attribute name="k4aColorVideoResolution" displayName="Color Video Stream Resolution" default="1536P" xsi:type="EnumAttributeDeclarationType">
             <Description>
                 <h:p>
                     Select Color Stream Resolution.
                 </h:p>
             </Description>
 
-            <EnumValue name="1920x1080" displayName="1920x1080"/>
-            <EnumValue name="1280x720" displayName="1280x720"/>
-            <EnumValue name="960x540" displayName="960x540"/>
-            <EnumValue name="848x480" displayName="848x480"/>
-            <EnumValue name="640x480" displayName="640x480"/>
-            <EnumValue name="640x360" displayName="640x360"/>
-            <EnumValue name="424x240" displayName="424x240"/>
-            <EnumValue name="320x240" displayName="320x240"/>
-            <EnumValue name="320x180" displayName="320x180"/>
+            <EnumValue name="OFF" displayName="OFF"/>
+            <EnumValue name="720P" displayName="720P 16:9"/>
+            <EnumValue name="1080P" displayName="1080P 16:9"/>
+            <EnumValue name="1440P" displayName="1440P 16:9"/>
+            <EnumValue name="1536P" displayName="1536P 4:3"/>
+            <EnumValue name="2160P" displayName="2160P 16:9"/>
+            <EnumValue name="3072P" displayName="3072P 4:3"/>
         </Attribute>
 
-        <Attribute name="rsDepthResolution" displayName="Depth Stream Resolution" default="1280x720" xsi:type="EnumAttributeDeclarationType">
+        <Attribute name="k4aDepthMode" displayName="Depth Mode" default="NFOV_2X2BINNED" xsi:type="EnumAttributeDeclarationType">
             <Description>
                 <h:p>
-                    Select Depth Stream Resolution.
+                    Select Depth Mode.
                 </h:p>
             </Description>
 
-            <EnumValue name="1280x720" displayName="1280x720"/>
-            <EnumValue name="848x480" displayName="848x480"/>
-            <EnumValue name="640x480" displayName="640x480"/>
-            <EnumValue name="640x360" displayName="640x360"/>
-            <EnumValue name="480x270" displayName="480x270"/>
-            <EnumValue name="424x240" displayName="424x240"/>
+            <EnumValue name="NFOV_2X2BINNED" displayName="NFov 2x2 Binned"/>
+            <EnumValue name="NFOV_UNBINNED" displayName="NFov Unbinned"/>
+            <EnumValue name="WFOV_2X2BINNED" displayName="WFov 2x2 Binned"/>
+            <EnumValue name="WFOV_UNBINNED" displayName="WFov Unbinned"/>
+            <EnumValue name="PASSIVE_IR" displayName="Passive IR"/>
         </Attribute>
 
-        <Attribute name="rsOperationMode" displayName="Operation Mode" default="LIVESTREAM" xsi:type="EnumAttributeDeclarationType">
+        <Attribute name="k4aWiredSyncMode" displayName="Depth Mode" default="STANDALONE" xsi:type="EnumAttributeDeclarationType">
             <Description>
                 <h:p>
                     Select Operation Mode.
                 </h:p>
             </Description>
 
-            <EnumValue name="LIVESTREAM" displayName="Livestream"/>
-            <EnumValue name="LIVESTREAM_RECORD" displayName="Livestream + Recording"/>
-            <EnumValue name="PLAYBACK" displayName="Playback"/>
+            <EnumValue name="STANDALONE" displayName="Standalone"/>
+            <EnumValue name="MASTER" displayName="Master"/>
+            <EnumValue name="SUBORDINATE" displayName="Subordinate"/>
         </Attribute>
 
-        <Attribute name="rsHardwareSync" displayName="Hardware Sync Mode" default="DEFAULT" xsi:type="EnumAttributeDeclarationType">
-            <Description>
-                <h:p>
-                    Select Hardware Sync Mode.
-                </h:p>
-            </Description>
+        <Attribute name="k4aFrameRate" displayName="Frame Rate" default="30" xsi:type="EnumAttributeDeclarationType">
+          <Description>
+            <h:p>
+              Select Frame Rate.
+            </h:p>
+          </Description>
 
-            <EnumValue name="DEFAULT" displayName="Default"/>
-            <EnumValue name="MASTER" displayName="Master"/>
-            <EnumValue name="SLAVE" displayName="Slave"/>
+          <EnumValue name="5" displayName="5 FPS"/>
+          <EnumValue name="15" displayName="1 5FPS"/>
+          <EnumValue name="30" displayName="30 FPS"/>
         </Attribute>
 
     </GlobalDataflowAttributeDeclarations>

@@ -235,6 +235,9 @@ using namespace Dataflow;
 		k4a::device m_device;
 		k4a_device_configuration_t m_device_config;
 
+		k4a::image m_xytable;
+		bool m_xytable_initialized;
+
         bool m_autoGPUUpload;
     };
 

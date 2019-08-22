@@ -116,6 +116,43 @@ bool get_pose_from_extrinsics(const k4a_calibration_extrinsics_t& extrinsics, Ma
     return true;
 }
 
+
+static void create_xy_table(const k4a_calibration_t *calibration, k4a_image_t xy_table)
+{
+	k4a_float2_t *table_data = (k4a_float2_t *)(void *)k4a_image_get_buffer(xy_table);
+
+	int width = calibration->depth_camera_calibration.resolution_width;
+	int height = calibration->depth_camera_calibration.resolution_height;
+
+	k4a_float2_t p;
+	k4a_float3_t ray;
+	int valid;
+
+	for (int y = 0, idx = 0; y < height; y++)
+	{
+		p.xy.y = (float)y;
+		for (int x = 0; x < width; x++, idx++)
+		{
+			p.xy.x = (float)x;
+
+			k4a_calibration_2d_to_3d(
+				calibration, &p, 1.f, K4A_CALIBRATION_TYPE_DEPTH, K4A_CALIBRATION_TYPE_DEPTH, &ray, &valid);
+
+			if (valid)
+			{
+				table_data[idx].xy.x = ray.xyz.x;
+				table_data[idx].xy.y = ray.xyz.y;
+			}
+			else
+			{
+				table_data[idx].xy.x = nanf("");
+				table_data[idx].xy.y = nanf("");
+			}
+		}
+	}
+}
+
+
 Ubitrack::Vision::Image::ImageFormatProperties getImageFormatPropertiesFromK4AImage(const k4a::image& f) {
     auto imageFormatProperties = Vision::Image::ImageFormatProperties();
     switch (f.get_format()) {
@@ -194,6 +231,7 @@ namespace Ubitrack { namespace Drivers {
         //, m_depthLaserPower(150)
         //, m_depthEmitterEnabled(1)
         //, m_infraredGain(16)
+		, m_xytable_initialized(false)
         , m_autoGPUUpload(false)
     {
 
@@ -331,12 +369,6 @@ namespace Ubitrack { namespace Drivers {
 		m_device_config.subordinate_delay_off_master_usec = m_subordinateDelayOffMasterUsec;
 		m_device_config.disable_streaming_indicator = m_disableStreamingIndicator;
 
-		LOG4CPP_DEBUG(logger, "Started opening K4A device...");
-
-		m_device.start_cameras(&m_device_config);
-
-		LOG4CPP_DEBUG(logger, "Finished opening K4A device.");
-
     }
 
     void AzureKinectCameraComponent::retrieveCalibration() {
@@ -347,6 +379,20 @@ namespace Ubitrack { namespace Drivers {
 		if (calibration.depth_mode != K4A_DEPTH_MODE_OFF) {
 			get_intrinsics_for_camera(calibration.depth_camera_calibration, m_depthCameraModel);
 			get_pose_from_extrinsics(calibration.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR], m_depthToColorTransform);
+		}
+
+		if (m_depthMode != K4A_DEPTH_MODE_OFF) {
+			k4a_image_t xy_table = NULL;
+			k4a_image_create(K4A_IMAGE_FORMAT_CUSTOM,
+				calibration.depth_camera_calibration.resolution_width,
+				calibration.depth_camera_calibration.resolution_height,
+				calibration.depth_camera_calibration.resolution_width * (int)sizeof(k4a_float2_t),
+				&xy_table);
+
+			create_xy_table(&calibration, xy_table);
+
+			m_xytable = k4a::image(xy_table);
+			m_xytable_initialized = true;
 		}
 
     }
@@ -374,6 +420,10 @@ namespace Ubitrack { namespace Drivers {
         setupDevice();
         retrieveCalibration();
         setOptions();
+
+		LOG4CPP_DEBUG(logger, "Started opening K4A device...");
+		m_device.start_cameras(&m_device_config);
+		LOG4CPP_DEBUG(logger, "Finished opening K4A device.");
 
         // Start streaming
 		LOG4CPP_DEBUG(logger, "Starting capturing thread");
@@ -428,39 +478,37 @@ namespace Ubitrack { namespace Drivers {
 
 		auto ts = Measurement::Timestamp(frame.get_system_timestamp().count());
 
-		// need to figure out how to compute pointcloud => look at k4a::transformation class, seems to be a good start ..
+		if (m_outputPointCloudPort.isConnected()) {
+			int width = frame.get_width_pixels();
+			int height = frame.get_height_pixels();
+			
+			uint16_t *depth_data = (uint16_t *)(void *)frame.get_buffer();
+			k4a_float2_t *xy_table_data = (k4a_float2_t *)(void *)m_xytable.get_buffer();
 
-		//if (m_outputPointCloudPort.isConnected()) {
-		//	// Declare pointcloud object, for calculating pointclouds and texture mappings
-		//	rs2::pointcloud pc;
+			int number_of_points = width * height;
+			Math::Vector3d init_pos(0, 0, 0);
+			boost::shared_ptr < std::vector<Math::Vector3d> > pPointCloud = boost::make_shared< std::vector<Math::Vector3d> >(number_of_points, init_pos);
 
-		//	// Generate the pointcloud and texture mappings
-		//	rs2::points points = pc.calculate(df);
+			for (int i = 0; i < width * height; i++)
+			{
+				Math::Vector3d& p = pPointCloud->at(i);
 
-		//	// Tell pointcloud object to map to this color frame
-		//	// @todo: currently no access to the color image .. now sure how to achieve this with the current structure ..
-		//	// pc.map_to(color);
+				if (depth_data[i] != 0 && !isnan(xy_table_data[i].xy.x) && !isnan(xy_table_data[i].xy.y))
+				{
+					p[0] = xy_table_data[i].xy.x * (float)depth_data[i];
+					p[1] = xy_table_data[i].xy.y * (float)depth_data[i];
+					p[2] = (float)depth_data[i];
+				}
+				else
+				{
+					p[0] = nanf("");
+					p[1] = nanf("");
+					p[1] = nanf("");
+				}
+			}
 
-		//	auto vertices = points.get_vertices();
-
-		//	Math::Vector3d init_pos(0, 0, 0);
-		//	boost::shared_ptr < std::vector<Math::Vector3d> > pPointCloud = boost::make_shared< std::vector<Math::Vector3d> >(points.size(), init_pos);
-
-		//	for (size_t i = 0; i < points.size(); i++) {
-		//		Math::Vector3d& p = pPointCloud->at(i);
-
-		//		if (vertices[i].z != 0.)
-		//		{
-		//			p[0] = vertices[i].x;
-		//			p[1] = vertices[i].y;
-		//			p[2] = vertices[i].z;
-		//		}
-		//		else {
-		//			p[0] = p[1] = p[2] = 0.;
-		//		}
-		//	}
-		//	m_outputPointCloudPort.send(Measurement::PositionList(ts, pPointCloud));
-		//}
+			m_outputPointCloudPort.send(Measurement::PositionList(ts, pPointCloud));
+		}
 
 		if (m_outputDepthMapImagePort.isConnected()) {
 
