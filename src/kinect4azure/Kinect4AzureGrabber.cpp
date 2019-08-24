@@ -532,10 +532,12 @@ namespace Ubitrack { namespace Drivers {
 			int w = frame.get_width_pixels();
 			int h = frame.get_height_pixels();
 
-			auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void*)frame.get_buffer(), cv::Mat::AUTO_STEP);
+			// clone if not undistort !!!
+			auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void*)frame.get_buffer(), cv::Mat::AUTO_STEP).clone();
 
 			boost::shared_ptr< Vision::Image > pDepthImage(new Vision::Image(image));
-			pDepthImage = m_color_undistorter->undistort( pDepthImage );
+			// @todo: undistort seems not to be working with depth images
+			// pDepthImage = m_color_undistorter->undistort( pDepthImage );
 
 			pDepthImage->set_pixelFormat(imageFormatProperties.imageFormat);
 			pDepthImage->set_origin(imageFormatProperties.origin);
