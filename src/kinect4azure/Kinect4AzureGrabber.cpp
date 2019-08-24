@@ -384,9 +384,13 @@ namespace Ubitrack { namespace Drivers {
 		auto calibration = m_device.get_calibration(m_device_config.depth_mode, m_device_config.color_resolution);
 
 		get_intrinsics_for_camera(calibration.color_camera_calibration, m_colorCameraModel);
+		m_color_undistorter.reset(new Vision::Undistortion(m_colorCameraModel));
+
 		if (calibration.depth_mode != K4A_DEPTH_MODE_OFF) {
 			get_intrinsics_for_camera(calibration.depth_camera_calibration, m_depthCameraModel);
 			get_pose_from_extrinsics(calibration.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR], m_depthToColorTransform);
+
+			m_depth_undistorter.reset(new Vision::Undistortion(m_depthCameraModel));
 		}
 
 		if (m_depthMode != K4A_DEPTH_MODE_OFF) {
@@ -401,11 +405,8 @@ namespace Ubitrack { namespace Drivers {
 
 			m_xytable = k4a::image(xy_table);
 			m_xytable_initialized = true;
+
 		}
-
-		m_color_undistorter.reset(new Vision::Undistortion(m_colorCameraModel));
-
-
     }
 
     void AzureKinectCameraComponent::setOptions() {
@@ -531,10 +532,11 @@ namespace Ubitrack { namespace Drivers {
 			int w = frame.get_width_pixels();
 			int h = frame.get_height_pixels();
 
-			// need to copy image here.
-			auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void*)frame.get_buffer(), cv::Mat::AUTO_STEP).clone();
+			auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void*)frame.get_buffer(), cv::Mat::AUTO_STEP);
 
 			boost::shared_ptr< Vision::Image > pDepthImage(new Vision::Image(image));
+			pDepthImage = m_color_undistorter->undistort( pDepthImage );
+
 			pDepthImage->set_pixelFormat(imageFormatProperties.imageFormat);
 			pDepthImage->set_origin(imageFormatProperties.origin);
 

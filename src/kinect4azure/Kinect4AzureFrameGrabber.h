@@ -213,6 +213,7 @@ using namespace Dataflow;
 
         /** undistorter */
         boost::shared_ptr<Vision::Undistortion> m_color_undistorter;
+        boost::shared_ptr<Vision::Undistortion> m_depth_undistorter;
 
 
         // sensor configuration
