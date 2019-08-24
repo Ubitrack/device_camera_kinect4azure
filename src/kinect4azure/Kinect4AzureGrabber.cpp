@@ -403,6 +403,9 @@ namespace Ubitrack { namespace Drivers {
 			m_xytable_initialized = true;
 		}
 
+		m_color_undistorter.reset(new Vision::Undistortion(m_colorCameraModel));
+
+
     }
 
     void AzureKinectCameraComponent::setOptions() {
@@ -462,7 +465,8 @@ namespace Ubitrack { namespace Drivers {
 			k4a::capture capture;
 			if (m_device.get_capture(&capture, waitms))
 			{
-				
+			
+				// should check if output is connected here ..	
 				const k4a::image depthImage = capture.get_depth_image();
 				if (depthImage) { 
 					handleDepthFrame(depthImage);
@@ -470,7 +474,7 @@ namespace Ubitrack { namespace Drivers {
 					/* ignore the image */ 
 				}
 
-
+				// should check if output is connected here ..
 				const k4a::image colorImage = capture.get_color_image();
 				if (colorImage) {
 					handleColorFrame(colorImage);
@@ -478,6 +482,8 @@ namespace Ubitrack { namespace Drivers {
 				else {
 					/* ignore the image */
 				}
+
+				// should handle IR images as well (capture.get_ir_image())
 			}
 		}
 	}
@@ -559,13 +565,16 @@ namespace Ubitrack { namespace Drivers {
 		int w = frame.get_width_pixels();
 		int h = frame.get_height_pixels();
 
-		// need to copy image here.
-		auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void *)frame.get_buffer(), cv::Mat::AUTO_STEP).clone();
+		auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void *)frame.get_buffer(), cv::Mat::AUTO_STEP);
+		boost::shared_ptr< Vision::Image > pColorImage;
+
+		pColorImage.reset(new Vision::Image(image));
+		pColorImage = m_color_undistorter->undistort( pColorImage );
+
+		pColorImage->set_pixelFormat(imageFormatProperties.imageFormat);
+		pColorImage->set_origin(imageFormatProperties.origin);
 
 		if (m_outputColorImagePort.isConnected()) {
-			boost::shared_ptr<Vision::Image> pColorImage(new Vision::Image(image));
-			pColorImage->set_pixelFormat(imageFormatProperties.imageFormat);
-			pColorImage->set_origin(imageFormatProperties.origin);
 
 			if (m_autoGPUUpload) {
 				Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
@@ -579,7 +588,7 @@ namespace Ubitrack { namespace Drivers {
 
 		if (m_outputGreyImagePort.isConnected()) {
 			cv::Mat grayImage;
-			cv::cvtColor(image, grayImage, cv::COLOR_RGB2GRAY);
+			cv::cvtColor(pColorImage->Mat(), grayImage, cv::COLOR_RGB2GRAY);
 			boost::shared_ptr<Vision::Image> pGreyImage(new Vision::Image(grayImage));
 			pGreyImage->set_pixelFormat(imageFormatProperties.imageFormat);
 			pGreyImage->set_origin(imageFormatProperties.origin);

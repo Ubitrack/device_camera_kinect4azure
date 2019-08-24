@@ -66,6 +66,7 @@
 #include <utUtil/TracingProvider.h>
 
 #include <utVision/Image.h>
+#include <utVision/Undistortion.h>
 #include <opencv2/opencv.hpp>
 
 
@@ -209,6 +210,10 @@ using namespace Dataflow;
         Dataflow::PullSupplier <Measurement::Matrix3x3>        m_outputDepthIntrinsicsMatrixPort;
 
         Dataflow::PullSupplier <Measurement::Pose> m_depthToColorTransformPort;
+
+        /** undistorter */
+        boost::shared_ptr<Vision::Undistortion> m_color_undistorter;
+
 
         // sensor configuration
 		k4a_wired_sync_mode_t m_hwsync_mode;
