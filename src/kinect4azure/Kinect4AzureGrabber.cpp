@@ -107,10 +107,11 @@ bool get_pose_from_extrinsics(const k4a_calibration_extrinsics_t& extrinsics, Ma
 
     Math::Quaternion ut_quat(rot_mat);
 
+    // ubitrack measurements are in meters, k4a reports extrinsics in mm
     Math::Vector3d ut_trans(
-            (double)extrinsics.translation[0],
-            (double)extrinsics.translation[1],
-            (double)extrinsics.translation[2]
+            (double)extrinsics.translation[0] / 1000.,
+            (double)extrinsics.translation[1] / 1000.,
+            (double)extrinsics.translation[2] / 1000.
     );
     value = Math::Pose(ut_quat, ut_trans);
     return true;
