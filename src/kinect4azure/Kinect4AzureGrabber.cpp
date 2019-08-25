@@ -232,6 +232,8 @@ namespace Ubitrack { namespace Drivers {
         //, m_depthLaserPower(150)
         //, m_depthEmitterEnabled(1)
         //, m_infraredGain(16)
+        , m_undistort_color_image(false)
+        , m_undistort_depth_image(false)
 		, m_xytable_initialized(false)
         , m_autoGPUUpload(false)
     {
@@ -295,6 +297,13 @@ namespace Ubitrack { namespace Drivers {
         //subgraph->m_DataflowAttributes.getAttributeData( "rsLaserPower", m_depthLaserPower);
         //subgraph->m_DataflowAttributes.getAttributeData( "rsEmitterEnabled", m_depthEmitterEnabled);
         //subgraph->m_DataflowAttributes.getAttributeData( "rsInfraredGain", m_infraredGain);
+
+        if (subgraph->m_DataflowAttributes.hasAttribute("k4aUndistortColorImage")){
+			m_undistort_color_image = subgraph->m_DataflowAttributes.getAttributeString("k4aUndistortColorImage") == "true";
+		}
+        if (subgraph->m_DataflowAttributes.hasAttribute("k4aUndistortDepthImage")){
+			m_undistort_depth_image = subgraph->m_DataflowAttributes.getAttributeString("k4aUndistortDepthImage") == "true";
+		}
 
         Vision::OpenCLManager& oclManager = Vision::OpenCLManager::singleton();
         if (oclManager.isEnabled()) {
@@ -384,13 +393,17 @@ namespace Ubitrack { namespace Drivers {
 		auto calibration = m_device.get_calibration(m_device_config.depth_mode, m_device_config.color_resolution);
 
 		get_intrinsics_for_camera(calibration.color_camera_calibration, m_colorCameraModel);
-		m_color_undistorter.reset(new Vision::Undistortion(m_colorCameraModel));
+		if (m_undistort_color_image) {
+			m_color_undistorter.reset(new Vision::Undistortion(m_colorCameraModel));
+		}
 
 		if (calibration.depth_mode != K4A_DEPTH_MODE_OFF) {
 			get_intrinsics_for_camera(calibration.depth_camera_calibration, m_depthCameraModel);
 			get_pose_from_extrinsics(calibration.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR], m_depthToColorTransform);
 
-			m_depth_undistorter.reset(new Vision::Undistortion(m_depthCameraModel));
+			if (m_undistort_depth_image) {
+				m_depth_undistorter.reset(new Vision::Undistortion(m_depthCameraModel));
+			}
 		}
 
 		if (m_depthMode != K4A_DEPTH_MODE_OFF) {
@@ -532,12 +545,17 @@ namespace Ubitrack { namespace Drivers {
 			int w = frame.get_width_pixels();
 			int h = frame.get_height_pixels();
 
-			// clone if not undistort !!!
-			auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void*)frame.get_buffer(), cv::Mat::AUTO_STEP).clone();
+			auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void*)frame.get_buffer(), cv::Mat::AUTO_STEP);
 
-			boost::shared_ptr< Vision::Image > pDepthImage(new Vision::Image(image));
-			// @todo: undistort seems not to be working with depth images
-			// pDepthImage = m_color_undistorter->undistort( pDepthImage );
+			boost::shared_ptr< Vision::Image > pDepthImage;
+			if (m_undistort_depth_image) {
+				// @todo: undistort seems not to be working with depth images
+				pDepthImage.reset(new Vision::Image(image));
+				pDepthImage = m_color_undistorter->undistort( pDepthImage );
+			} else {
+				// clone if not undistort !!!
+				pDepthImage.reset(new Vision::Image(image.clone()));
+			}
 
 			pDepthImage->set_pixelFormat(imageFormatProperties.imageFormat);
 			pDepthImage->set_origin(imageFormatProperties.origin);
@@ -570,10 +588,15 @@ namespace Ubitrack { namespace Drivers {
 		int h = frame.get_height_pixels();
 
 		auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void *)frame.get_buffer(), cv::Mat::AUTO_STEP);
-		boost::shared_ptr< Vision::Image > pColorImage;
 
-		pColorImage.reset(new Vision::Image(image));
-		pColorImage = m_color_undistorter->undistort( pColorImage );
+		boost::shared_ptr< Vision::Image > pColorImage;
+		if (m_undistort_color_image) {
+			pColorImage.reset(new Vision::Image(image));
+			pColorImage = m_color_undistorter->undistort( pColorImage );
+		} else {
+			// clone if not undistort !!!
+			pColorImage.reset(new Vision::Image(image.clone()));
+		}
 
 		pColorImage->set_pixelFormat(imageFormatProperties.imageFormat);
 		pColorImage->set_origin(imageFormatProperties.origin);

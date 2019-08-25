@@ -121,7 +121,7 @@
               <EnumValue name="false" displayName="False"/>
               <EnumValue name="true"  displayName="True"/>
             </Attribute>
-            <Attribute name="k4aDisableStreamingIndicator" displayName="" default="false" xsi:type="EnumAttributeDeclarationType">
+            <Attribute name="k4aDisableStreamingIndicator" displayName="Disable Streaming Indicator LED" default="false" xsi:type="EnumAttributeDeclarationType">
               <Description>
                 <h:p>
                   Disable Streaming Indicator LED at the front.
@@ -131,6 +131,25 @@
               <EnumValue name="true"  displayName="True"/>
             </Attribute>
 
+            <Attribute name="k4aUndistortColorImage" displayName="Undistort Color Image" default="false" xsi:type="EnumAttributeDeclarationType">
+              <Description>
+                <h:p>
+                  Undistort Color Image.
+                </h:p>
+              </Description>
+              <EnumValue name="false" displayName="False"/>
+              <EnumValue name="true"  displayName="True"/>
+            </Attribute>
+
+            <Attribute name="k4aUndistortDepthImage" displayName="Undistort Depth Image" default="false" xsi:type="EnumAttributeDeclarationType">
+              <Description>
+                <h:p>
+                  Undistort Depth Image.
+                </h:p>
+              </Description>
+              <EnumValue name="false" displayName="False"/>
+              <EnumValue name="true"  displayName="True"/>
+            </Attribute>
 
           <Attribute name="uploadImageOnGPU" displayName="Automatic Upload on GPU" default="false" xsi:type="EnumAttributeDeclarationType">
                 <Description>

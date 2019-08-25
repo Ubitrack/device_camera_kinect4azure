@@ -212,6 +212,8 @@ using namespace Dataflow;
         Dataflow::PullSupplier <Measurement::Pose> m_depthToColorTransformPort;
 
         /** undistorter */
+        bool m_undistort_color_image;
+        bool m_undistort_depth_image;
         boost::shared_ptr<Vision::Undistortion> m_color_undistorter;
         boost::shared_ptr<Vision::Undistortion> m_depth_undistorter;
 
