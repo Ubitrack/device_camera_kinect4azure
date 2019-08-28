@@ -558,7 +558,8 @@ namespace Ubitrack { namespace Drivers {
 				pDepthImage = m_color_undistorter->undistort( pDepthImage );
 			} else {
 				// clone if not undistort !!!
-				pDepthImage.reset(new Vision::Image(image.clone()));
+				auto image2 = image.clone();
+				pDepthImage.reset(new Vision::Image(image2));
 			}
 
 			pDepthImage->set_pixelFormat(imageFormatProperties.imageFormat);
@@ -599,7 +600,8 @@ namespace Ubitrack { namespace Drivers {
 			pColorImage = m_color_undistorter->undistort( pColorImage );
 		} else {
 			// clone if not undistort !!!
-			pColorImage.reset(new Vision::Image(image.clone()));
+			auto image2 = image.clone();
+			pColorImage.reset(new Vision::Image(image2));
 		}
 
 		pColorImage->set_pixelFormat(imageFormatProperties.imageFormat);
