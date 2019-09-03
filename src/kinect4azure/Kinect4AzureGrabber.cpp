@@ -502,6 +502,13 @@ namespace Ubitrack { namespace Drivers {
 				}
 
 				// should handle IR images as well (capture.get_ir_image())
+				const k4a::image irImage = capture.get_ir_image();
+				if (irImage) {
+					handleIRFrame(irImage);
+				}
+				else {
+					/* ignore the image */
+				}
 			}
 		}
 	}
@@ -637,9 +644,45 @@ namespace Ubitrack { namespace Drivers {
 		}
 
 
-		// not implemented IR Stream ??
-
     }
+
+	void AzureKinectCameraComponent::handleIRFrame(k4a::image frame) {
+
+		auto ts = Measurement::Timestamp(frame.get_system_timestamp().count());
+		auto imageFormatProperties = getImageFormatPropertiesFromK4AImage(frame);
+
+		int w = frame.get_width_pixels();
+		int h = frame.get_height_pixels();
+
+		auto image = cv::Mat(cv::Size(w, h), imageFormatProperties.matType, (void *)frame.get_buffer(), cv::Mat::AUTO_STEP);
+
+		
+		
+		if (m_outputIRImagePort.isConnected()) {
+			boost::shared_ptr< Vision::Image > pIRImage;
+			if (m_undistort_depth_image) {
+				pIRImage.reset(new Vision::Image(image));
+				pIRImage = m_depth_undistorter->undistort(pIRImage);
+			}
+			else {
+				// clone if not undistort !!!
+				auto image2 = image.clone();
+				pIRImage.reset(new Vision::Image(image2));
+			}
+
+			pIRImage->set_pixelFormat(imageFormatProperties.imageFormat);
+			pIRImage->set_origin(imageFormatProperties.origin);
+
+			if (m_autoGPUUpload) {
+				Vision::OpenCLManager &oclManager = Vision::OpenCLManager::singleton();
+				if (oclManager.isInitialized()) {
+					//force upload to the GPU
+					pIRImage->uMat();
+				}
+			}
+			m_outputIRImagePort.send(Measurement::ImageMeasurement(ts, pIRImage));
+		}
+	}
 
     void AzureKinectCameraComponent::stop()
     {
