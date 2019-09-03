@@ -83,7 +83,7 @@ bool get_intrinsics_for_camera(const k4a_calibration_camera_t& k4a_calib, Math::
     // Does this apply to Kinect Azure ??
 	// this camera has image origin of 0, ubitrack default is 1, flip needed of cy and tangential parameter needed
     //value = Vision::Util::cv2::correctForOrigin(0, value);
-    //LOG4CPP_DEBUG(logger, key << " Camera Model: " << value);
+    //LOG4CPP_INFO(logger, " Camera Model: " << value);
 
 	return true;
 }
@@ -393,7 +393,7 @@ namespace Ubitrack { namespace Drivers {
     }
 
     void AzureKinectCameraComponent::retrieveCalibration() {
-
+		
 		auto calibration = m_device.get_calibration(m_device_config.depth_mode, m_device_config.color_resolution);
 
 		get_intrinsics_for_camera(calibration.color_camera_calibration, m_colorCameraModel);
@@ -555,7 +555,7 @@ namespace Ubitrack { namespace Drivers {
 			if (m_undistort_depth_image) {
 				// @todo: undistort seems not to be working with depth images
 				pDepthImage.reset(new Vision::Image(image));
-				pDepthImage = m_color_undistorter->undistort( pDepthImage );
+				pDepthImage = m_depth_undistorter->undistort( pDepthImage );
 			} else {
 				// clone if not undistort !!!
 				auto image2 = image.clone();
