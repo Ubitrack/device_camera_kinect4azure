@@ -165,6 +165,8 @@ using namespace Dataflow;
         void handleDepthFrame(k4a::image f);
 
 		void handleColorFrame(k4a::image f);
+
+		void handleIRFrame(k4a::image f);
 		
 		void stop();
 

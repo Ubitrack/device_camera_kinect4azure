@@ -51,6 +51,14 @@
                 <Attribute name="type" value="3DPositionList" xsi:type="EnumAttributeReferenceType"/>
                 <Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>
             </Edge>
+			<Edge name="IRImageOutput" source="DepthCamera" destination="DepthImagePlane" displayName="IR Image">
+                <Description>
+                    <h:p>The IR image.</h:p>
+                </Description>
+                <Attribute name="type" value="Image" xsi:type="EnumAttributeReferenceType"/>
+                <Attribute name="mode" value="push" xsi:type="EnumAttributeReferenceType"/>
+            </Edge>
+			
 
             <Edge name="ColorIntrinsics" source="ColorCamera" destination="ColorImagePlane" displayName="Color Camera Intrinsics">
                 <Description>
