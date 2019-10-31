@@ -90,6 +90,11 @@ bool get_intrinsics_for_camera(const k4a_calibration_camera_t& k4a_calib, Math::
 
 bool get_pose_from_extrinsics(const k4a_calibration_extrinsics_t& extrinsics, Math::Pose& value) {
 
+    // Kinect uses a right-handed coordinate system with x-right, y-down semantics
+    // to convert it to opengl x-right, y-up, we need to rotate 180 deg around the x-axis
+	auto k4a2opengl = Math::Quaternion(1., 0., 0., 0.);
+
+
     auto rot_mat = Math::Matrix3x3d::identity();
 
     // libkinect4azure is row major and ubitrack store matrices column-major
@@ -113,7 +118,7 @@ bool get_pose_from_extrinsics(const k4a_calibration_extrinsics_t& extrinsics, Ma
             (double)extrinsics.translation[1] / 1000.,
             (double)extrinsics.translation[2] / 1000.
     );
-    value = Math::Pose(ut_quat, ut_trans);
+    value = Math::Pose(k4a2opengl * ut_quat, k4a2opengl * ut_trans);
     return true;
 }
 
