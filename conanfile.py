@@ -46,6 +46,7 @@ class UbitrackCoreConan(ConanFile):
     def build(self):
         cmake = CMake(self)
         cmake.verbose = True
+        cmake.definitions['WITH_OPENCL'] = self.options['ubitrack_vision'].with_opencl
         cmake.configure()
         cmake.build()
         cmake.install()
