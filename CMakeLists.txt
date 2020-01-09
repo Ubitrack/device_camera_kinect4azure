@@ -37,6 +37,7 @@ set(UBITRACK_EXTRA_LIBS ${UBITRACK_EXTRA_LIBS})
 set(UBITRACK_COMPILE_DEFINITIONS ${UBITRACK_COMPILE_DEFINITIONS} "HAVE_KINECT4AZURE")
 
 add_subdirectory(src/kinect4azure)
+add_subdirectory(src/kinect4azure_io)
 
 ubitrack_install_utql("doc/utql/*.xml" "doc/utql/*/*.xml"  "doc/utql/*/*/*.xml")
 ubitrack_install_doc("doc/utqlDoc/*" "doc/utqlDoc/*/*" "doc/utqlDoc/*/*/*")
