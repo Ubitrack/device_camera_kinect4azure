@@ -35,7 +35,7 @@ class UbitrackCoreConan(ConanFile):
         self.requires("ubitrack_core/%s@%s" % (self.version, userChannel))
         self.requires("ubitrack_vision/%s@%s" % (self.version, userChannel))
         self.requires("ubitrack_dataflow/%s@%s" % (self.version, userChannel))
-        self.requires("kinect-azure-sensor-sdk/1.3.0@camposs/stable")
+        self.requires("kinect-azure-sensor-sdk/1.4.1@camposs/stable")
        
 
     def imports(self):
