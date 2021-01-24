@@ -418,7 +418,7 @@ protected:
 
             int w = k4a_image_get_width_pixels(image );
             int h = k4a_image_get_height_pixels(image );
-            u_int8_t* bufferp = k4a_image_get_buffer(image);
+            uint8_t* bufferp = k4a_image_get_buffer(image);
             size_t bufferSize = k4a_image_get_size(image);
 
             if (k4aFormat == K4A_IMAGE_FORMAT_COLOR_BGRA32) {
