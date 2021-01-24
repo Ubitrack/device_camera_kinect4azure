@@ -220,7 +220,7 @@ namespace Ubitrack { namespace Drivers {
         , m_outputColorCameraModelPort("ColorCameraModel", *this, boost::bind(&AzureKinectCameraComponent::getColorCameraModel, this, _1))
         , m_outputColorIntrinsicsMatrixPort("ColorIntrinsics", *this, boost::bind(&AzureKinectCameraComponent::getColorIntrinsic, this, _1))
         , m_outputDepthCameraModelPort("DepthCameraModel", *this, boost::bind(&AzureKinectCameraComponent::getDepthCameraModel, this, _1))
-        , m_outputDepthIntrinsicsMatrixPort("DepthtIntrinsics", *this, boost::bind(&AzureKinectCameraComponent::getDepthIntrinsic, this, _1))
+        , m_outputDepthIntrinsicsMatrixPort("DepthIntrinsics", *this, boost::bind(&AzureKinectCameraComponent::getDepthIntrinsic, this, _1))
         , m_depthToColorTransformPort("DepthToColorTransform", *this, boost::bind(&AzureKinectCameraComponent::getDepthToColorTransform, this, _1))
 
 		, m_hwsync_mode(K4A_WIRED_SYNC_MODE_STANDALONE)
