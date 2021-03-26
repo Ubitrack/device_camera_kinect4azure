@@ -404,6 +404,7 @@ namespace Ubitrack { namespace Drivers {
 		get_intrinsics_for_camera(calibration.color_camera_calibration, m_colorCameraModel);
 		if (m_undistort_color_image) {
 			m_color_undistorter.reset(new Vision::Undistortion(m_colorCameraModel));
+			m_colorCameraModel.matrix = m_color_undistorter->getMatrix();
 		}
 
 		if (calibration.depth_mode != K4A_DEPTH_MODE_OFF) {
@@ -412,6 +413,7 @@ namespace Ubitrack { namespace Drivers {
 
 			if (m_undistort_depth_image) {
 				m_depth_undistorter.reset(new Vision::Undistortion(m_depthCameraModel));
+				m_depthCameraModel.matrix = m_depth_undistorter->getMatrix();
 			}
 		}
 
